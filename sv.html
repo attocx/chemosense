@@ -240,10 +240,11 @@
             <label style="font-size:0.85rem; font-weight: bold;">Upload CSV or Excel</label>
             <div class="upload-row">
                 <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx">
-            </div>
+                            </div>
             <div class="upload-help">
                 Upload a file with two columns: first column = <i>H</i><sub>0</sub> concentration (mM), second column = <i>F</i><sub>0</sub>/<i>F</i>. A header row is allowed and will be ignored automatically.
             </div>
+            <div id="fileStatus" class="file-note"></div>
         </div>
         <div class="control-group">
             <label style="font-size:0.85rem; font-weight: bold;">[H]₀ / mM</label>
@@ -406,20 +407,62 @@
             safeUpdate(false);
         }
 
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => reject(new Error("Could not read the selected text file."));
+                reader.readAsText(file);
+            });
+        }
+
+        function readFileAsArrayBuffer(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error("Could not read the selected Excel file."));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
         async function handleUploadedFile(file) {
-            let workbook;
-            if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
-                const text = await file.text();
-                workbook = XLSX.read(text, { type: 'string' });
-            } else {
-                const buffer = await file.arrayBuffer();
-                workbook = XLSX.read(buffer, { type: 'array' });
+            if (!file) {
+                showError("Please choose a file first.");
+                return;
             }
 
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
-            const { h, sv } = normalizeSheetRows(rows);
-            populateInputsFromTable(h, sv);
+            const name = file.name || "Selected file";
+            try {
+                let rows = [];
+                if (/\.(csv|txt)$/i.test(name)) {
+                    const fileText = await readFileAsText(file);
+                    rows = fileText.split(/\r?\n/).map(line =>
+                        line.split(/,|\t|;+/).map(cell => String(cell).trim())
+                    );
+                } else if (/\.(xls|xlsx)$/i.test(name)) {
+                    if (typeof XLSX === "undefined") {
+                        throw new Error("Excel import library could not be loaded in this browser session. Please save the sheet as CSV and import that file instead.");
+                    }
+                    const buffer = await readFileAsArrayBuffer(file);
+                    const workbook = XLSX.read(buffer, { type: 'array' });
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' });
+                } else {
+                    throw new Error("Unsupported file type. Please upload CSV, TXT, XLS, or XLSX.");
+                }
+
+                const { h, sv } = normalizeSheetRows(rows);
+                $("h0_input").value = h.join(', ');
+                $("sv_input").value = sv.join(', ');
+                $("fileStatus").textContent = `${name}: imported ${h.length} data rows into the input boxes.`;
+
+                clearError();
+                safeUpdate(false);
+            } catch (err) {
+                showError(err.message || "Could not read the selected file.");
+                $("fileStatus").textContent = "";
+            }
         }
 
         function showError(msg) {
@@ -705,22 +748,15 @@
         });
 
         $("Kd_num").addEventListener("input", () => {
-            $("dataFile").addEventListener("change", async (event) => {
-            const file = event.target.files && event.target.files[0];
-            if (!file) return;
-            clearError();
-            statusBox.textContent = `Loading ${file.name} ...`;
-            try {
-                await handleUploadedFile(file);
-                statusBox.textContent = `Loaded ${file.name}`;
-            } catch (err) {
-                showError(`Could not read uploaded file. ${err.message}`);
-                statusBox.textContent = "";
-            }
+            syncKdSliderFromInput();
+            safeUpdate(false);
         });
 
-        syncKdSliderFromInput();
-            safeUpdate(false);
+        $("dataFile").addEventListener("change", async (event) => {
+            clearError();
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            await handleUploadedFile(file);
         });
 
         $("Kd_num").addEventListener("blur", () => {
