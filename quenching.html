@@ -235,6 +235,32 @@
             margin-top: 2px;
         }
 
+        .upload-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        .upload-row input[type="file"] {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .upload-help {
+            font-size: 0.78rem;
+            color: #444;
+            line-height: 1.45;
+            margin-top: 6px;
+        }
+
+        .file-note {
+            font-size: 0.78rem;
+            color: #0d47a1;
+            margin-top: 6px;
+            min-height: 1.2em;
+        }
+
         input[type="range"] {
             width: 100%;
             box-sizing: border-box;
@@ -259,7 +285,9 @@
         <h3>1. Data Input</h3>
         <div class="control-group">
             <label style="font-size:0.85rem; font-weight: bold;">Upload CSV or Excel</label>
-            <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx" style="width:100%; margin-top:6px;">
+            <div class="upload-row">
+                <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx">
+                            </div>
             <div class="upload-help">
                 Upload a file with two columns: first column = [H]₀ / mM, second column = Fluorescence / a.u.
                 A header row is allowed and will be ignored automatically.
@@ -757,7 +785,10 @@
 
         $("dataFile").addEventListener("change", async (event) => {
             clearError();
-            await handleDataFile(event.target.files && event.target.files[0]);
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                await handleDataFile(file);
+            }
         });
 
         syncLinearPair("alpha", "alpha_num");
