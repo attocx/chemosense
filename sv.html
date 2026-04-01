@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <title>1:n Stern-Volmer Analysis Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script>window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]], processEscapes: true }, svg: { fontCache: "global" } };</script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
         body {
             font-family: "Segoe UI", Arial, sans-serif;
@@ -220,6 +223,7 @@
             padding: 3px;
             box-sizing: border-box;
         }
+\n        .upload-box {\n            background: #fff;\n            border: 1px solid #ddd;\n            padding: 10px;\n            margin-bottom: 12px;\n            border-radius: 4px;\n        }\n\n        .upload-row {\n            display: flex;\n            gap: 8px;\n            align-items: center;\n            flex-wrap: wrap;\n            margin-top: 8px;\n        }\n\n        .upload-row input[type="file"] {\n            width: 100%;\n            font-size: 0.8rem;\n        }\n\n        .upload-help {\n            font-size: 0.75rem;\n            color: #666;\n            line-height: 1.4;\n            margin-top: 6px;\n        }\n\n        .formula-box mjx-container {\n            font-size: 108% !important;\n        }\n
     </style>
 </head>
 <body>
@@ -232,6 +236,15 @@
         <div id="errorBox" class="error-box"></div>
 
         <h3>1. Data Input</h3>
+        <div class="upload-box">
+            <label style="font-size:0.85rem; font-weight: bold;">Upload CSV or Excel</label>
+            <div class="upload-row">
+                <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx">
+            </div>
+            <div class="upload-help">
+                Upload a file with two columns: first column = <i>H</i><sub>0</sub> concentration (mM), second column = <i>F</i><sub>0</sub>/<i>F</i>. A header row is allowed and will be ignored automatically.
+            </div>
+        </div>
         <div class="control-group">
             <label style="font-size:0.85rem; font-weight: bold;">[H]₀ / mM</label>
             <textarea id="h0_input">0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 2, 5, 10</textarea>
@@ -285,7 +298,7 @@
 
         <div class="control-group">
             <div class="label-row">
-                <span><i>K</i><sub>SV</sub> / mM⁻¹ (Dynamic Quenching) </span>
+                <span><i>k</i><sub>q</sub>·τ<sub>0</sub> / mM⁻¹</span>
                 <div class="right-side">
                     <input type="checkbox" id="fix_KSV"> Fix
                     <input type="number" id="KSV_num" class="val-input" step="0.0001" value="0.5000">
@@ -298,12 +311,17 @@
         <button id="autoFitBtn">Snap to Fit</button>
 
         <div class="formula-box">
-            <b>Stern–Volmer Model:</b><br>
-            <i>F</i>₀ / <i>F</i> = [1 + <i>K</i><sub>SV</sub>(<i>n</i>[<i>H</i>]₀ - <i>x</i>)] / [1 - (<i>x</i>/[<i>I</i>]₀)(1 - α)]
+            <b>Model:</b><br>
+            \[
+            \frac{F_0}{F}=\frac{1+\left(k_q\tau_0\right)\left([H]_0-\frac{x}{n}\right)}{1-\frac{x}{[I]_0}(1-\alpha)}
+            \]
             <hr>
-            <b>Complex Concentration (<i>x</i>):</b><br>
-            <i>x</i> = [<i>b</i> - √(<i>b</i>² - 4[<i>I</i>]₀<i>n</i>[<i>H</i>]₀)] / 2<br>
-            <small>where <i>b</i> = [<i>I</i>]₀ + <i>n</i>[<i>H</i>]₀ + <i>K</i><sub>d</sub></small>
+            <b>Bound complex concentration:</b><br>
+            \[
+            x=\frac{b-\sqrt{b^2-4[I]_0\,n[H]_0}}{2}
+            \quad\text{with}\quad
+            b=[I]_0+n[H]_0+K_d
+            \]
         </div>
 
         <button id="resultBtn">Apply Final Labels</button>
@@ -335,7 +353,7 @@
             <strong>Fitting Strategy:</strong><br>
             1. <b>Fix n:</b> Use integers based on realistic interaction; experimentally determined with ITC or Job Plot.<br>
             2. <b>Fix α:</b> Check whether <i>F</i>₀/<i>F</i> plateaus at high [H].<br>
-            3. <b>Free Fit:</b> Let Kd and K<sub>SV</sub> solve via regression.<br>
+            3. <b>Free Fit:</b> Let Kd and <i>k</i><sub>q</sub>·τ<sub>0</sub> solve via regression.<br>
             4. <b>Residuals:</b> Ensure random scatter around zero.
         </div>
         
@@ -358,6 +376,50 @@
                 .filter(v => v !== "")
                 .map(Number)
                 .filter(v => Number.isFinite(v));
+        }
+
+        function looksNumericRow(row) {
+            if (!Array.isArray(row) || row.length < 2) return false;
+            const a = Number(row[0]);
+            const b = Number(row[1]);
+            return Number.isFinite(a) && Number.isFinite(b);
+        }
+
+        function normalizeSheetRows(rows) {
+            const cleaned = rows
+                .map(row => Array.isArray(row) ? row : [])
+                .filter(row => row.some(cell => String(cell ?? '').trim() !== ''));
+
+            const numericRows = cleaned.filter(looksNumericRow);
+            if (numericRows.length === 0) {
+                throw new Error('No usable numeric data found. The file should contain two columns: [H]₀ and F₀/F.');
+            }
+
+            const h = numericRows.map(row => Number(row[0]));
+            const sv = numericRows.map(row => Number(row[1]));
+            return { h, sv };
+        }
+
+        function populateInputsFromTable(h, sv) {
+            $("h0_input").value = h.join(', ');
+            $("sv_input").value = sv.join(', ');
+            safeUpdate(false);
+        }
+
+        async function handleUploadedFile(file) {
+            let workbook;
+            if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.txt')) {
+                const text = await file.text();
+                workbook = XLSX.read(text, { type: 'string' });
+            } else {
+                const buffer = await file.arrayBuffer();
+                workbook = XLSX.read(buffer, { type: 'array' });
+            }
+
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+            const { h, sv } = normalizeSheetRows(rows);
+            populateInputsFromTable(h, sv);
         }
 
         function showError(msg) {
@@ -431,7 +493,8 @@
             const disc = Math.max(b * b - 4 * I0 * n * H0, 0);
             const x = (b - Math.sqrt(disc)) / 2;
 
-            const numerator = 1 + KSV * Math.max(n * H0 - x, 0);
+            const freeH = Math.max(H0 - x / n, 0);
+            const numerator = 1 + KSV * freeH;
             const denominator = 1 - (x / I0) * (1 - alpha);
             const value = numerator / denominator;
 
@@ -642,7 +705,21 @@
         });
 
         $("Kd_num").addEventListener("input", () => {
-            syncKdSliderFromInput();
+            $("dataFile").addEventListener("change", async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            clearError();
+            statusBox.textContent = `Loading ${file.name} ...`;
+            try {
+                await handleUploadedFile(file);
+                statusBox.textContent = `Loaded ${file.name}`;
+            } catch (err) {
+                showError(`Could not read uploaded file. ${err.message}`);
+                statusBox.textContent = "";
+            }
+        });
+
+        syncKdSliderFromInput();
             safeUpdate(false);
         });
 
@@ -677,7 +754,7 @@
 
             if (labeled) {
                 mainChart.data.datasets[1].label =
-                    `Fit | Kd=${formatKdWithUnit(Kd)} | n=${n.toFixed(4)} | α=${alpha.toFixed(4)} | KSV=${KSV.toFixed(4)} mM⁻¹`;
+                    `Fit | Kd=${formatKdWithUnit(Kd)} | n=${n.toFixed(4)} | α=${alpha.toFixed(4)} | kq·τ0=${KSV.toFixed(4)} mM⁻¹`;
             } else {
                 mainChart.data.datasets[1].label = "Fit";
             }
@@ -948,7 +1025,7 @@
             const statsText =
                 `R² = ${summary.r2.toFixed(4)}   RMSE = ${summary.rmse.toFixed(4)}   ` +
                 `Kd = ${formatKdWithUnit(params.Kd)}   n = ${params.n.toFixed(4)}   ` +
-                `α = ${params.alpha.toFixed(4)}   KSV = ${params.KSV.toFixed(4)} mM⁻¹`;
+                `α = ${params.alpha.toFixed(4)}   kq·τ0 = ${params.KSV.toFixed(4)} mM⁻¹`;
 
             svg += textSvg(Math.round(width * 0.03), Math.round(headerH * 0.60), statsText, statsSize, "bold", "start");
 
