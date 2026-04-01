@@ -10,7 +10,11 @@
         .tool-card { border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 20px; transition: 0.3s; }
         .tool-card:hover { border-color: #3498db; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .tool-link { font-weight: bold; font-size: 1.2rem; color: #3498db; text-decoration: none; }
+        /* Style for the documentation link */
+        .doc-link { color: #639A00; font-weight: bold; text-decoration: none; border-bottom: 1px dashed #639A00; }
+        .doc-link:hover { color: #4e7a00; border-bottom-style: solid; }
         .description { margin-top: 5px; color: #666; }
+        .meta-info { font-size: 0.9rem; color: #888; margin-top: 10px; font-style: italic; }
     </style>
 </head>
 <body>
@@ -20,13 +24,24 @@
 
     <div class="tool-card">
         <a class="tool-link" href="quenching.html">Fluorescence Quenching →</a>
-        <p class="description">Fit the raw fluorescence quenching data.</p>
+        <p class="description">Fit the raw fluorescence quenching data using the 1:1 binding model with dynamic range analysis.</p>
     </div>
 
     <div class="tool-card">
         <a class="tool-link" href="sv.html">Stern Volmer Analysis →</a>
-        <p class="description">Fit the Stern Volmer type of data.</p>
+        <p class="description">Analyze quenching constants ($K_{SV}$ and $K_d$) and stoichiometry ($n$).</p>
     </div>
 
-    </body>
+    <div class="tool-card" style="background-color: #fdfdfd; border-style: dashed;">
+        <span style="font-weight: bold; font-size: 1.2rem; color: #2c3e50;">Technical Documentation</span>
+        <p class="description">
+            Detailed derivation of the fitting models, including the quadratic 1:1 binding equation and the influence of fractional dimness ($\alpha$).
+        </p>
+        <p>
+            <a class="doc-link" href="Chemosense_fitting_document.docx" download>📥 Download Model Details (Word .docx)</a>
+        </p>
+        <p class="meta-info">Note: Ensure the .docx file is uploaded to the same folder as this index file.</p>
+    </div>
+
+</body>
 </html>
