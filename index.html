@@ -3,95 +3,59 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fitting Toolbox</title>
+    <title>Chemosense Fitting Toolbox</title>
     <style>
-        body { font-family: sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 20px; color: #333; }
+        body { font-family: sans-serif; line-height: 1.6; max-width: 900px; margin: 40px auto; padding: 20px; color: #333; }
         h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        h2 { color: #2c3e50; margin-top: 0; }
+        h2 { color: #2c3e50; margin-top: 30px; }
+        
+        /* Tool Cards */
         .tool-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; transition: 0.3s; }
         .tool-card:hover { border-color: #3498db; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .tool-link { font-weight: bold; font-size: 1.2rem; color: #3498db; text-decoration: none; }
         .description { margin-top: 5px; color: #666; }
+
+        /* Document Viewer Styling */
+        .doc-section { margin-top: 40px; padding-top: 20px; border-top: 4px solid #639A00; }
+        .iframe-container { position: relative; width: 100%; height: 800px; border: 1px solid #ccc; border-radius: 8px; overflow: hidden; background-color: #f4f4f4; }
+        iframe { width: 100%; height: 100%; border: none; }
         
-        /* Documentation Styles */
-        .theory-section { background-color: #fafafa; border-top: 3px solid #639A00; }
-        .doc-link { color: #639A00; font-weight: bold; text-decoration: none; border-bottom: 1px dashed #639A00; }
-        .doc-link:hover { color: #4e7a00; border-bottom-style: solid; }
-        
-        /* Math Formatting */
-        .math-box { 
-            background: #fff; 
-            padding: 20px; 
-            border: 1px solid #eee; 
-            border-radius: 4px; 
-            text-align: center; 
-            margin: 20px 0; 
-            font-size: 1.2rem; 
-            font-family: 'Cambria', 'Georgia', serif;
-            overflow-x: auto;
-            white-space: nowrap;
-        }
-        .fraction { display: inline-block; vertical-align: middle; text-align: center; margin: 0 5px; }
-        .numerator { border-bottom: 1px solid #333; padding: 0 5px; }
-        .denominator { padding: 0 5px; }
-        .theory-content { font-family: 'Cambria', 'Georgia', serif; }
+        .download-footer { margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-download { color: #639A00; font-weight: bold; text-decoration: none; border: 1px solid #639A00; padding: 8px 15px; border-radius: 4px; transition: 0.2s; }
+        .btn-download:hover { background-color: #639A00; color: white; }
     </style>
 </head>
 <body>
 
     <h1>Data Fitting Toolbox</h1>
-    <p>Welcome! Select one of the tools below to start analyzing your data.</p>
+    <p>Welcome! Select one of the tools below to start analyzing your data or review the model theory below.</p>
 
     <div class="tool-card">
-        <a class="tool-link" href="quenching.html">Fluorescence Quenching →</a>
-        <p class="description">Fit raw fluorescence data using the 1:1 binding model with Dynamic Range ($DR$) and fractional dimness ($\alpha$) analysis.</p>
+        <a class="tool-link" href="quenching.html">Fluorescence Quenching Tool →</a>
+        <p class="description">Analyze raw fluorescence quenching data with the 1:n binding model and fractional dimness (&alpha;).</p>
     </div>
 
     <div class="tool-card">
-        <a class="tool-link" href="sv.html">Stern Volmer Analysis →</a>
-        <p class="description">Analyze quenching constants ($K_{SV}$ and $K_d$) and stoichiometry ($n$) for complex quenching regimes.</p>
+        <a class="tool-link" href="sv.html">Stern Volmer Analysis Tool →</a>
+        <p class="description">Analyze Stern-Volmer data regarding both static and dynamic quenching.</p>
     </div>
 
-    <div class="tool-card theory-section" id="model-details">
-        <h2>Model Theory & Derivation</h2>
-        <p class="description">Technical framework for the "Realistic Dim Species" 1:1 binding model.</p>
+    <div class="doc-section" id="theory">
+        <h2>Technical Documentation & Model Derivation</h2>
+        <p class="description">Full theoretical background for the Chemosense fitting algorithms:</p>
         
-        <div class="theory-content">
-            <h3>1. The 1:1 Binding Equation</h3>
-            <p>Total fluorescence <i>F</i> is derived from the conservation of mass and the equilibrium dissociation constant (<i>K<sub>d</sub></i>). Expressed in initial conditions:</p>
-            
-            <div class="math-box">
-                <i>F</i> = <i>F<sub>max</sub></i> &times; 
-                [ 1 &minus; (1 &minus; &alpha;) &times; 
-                <div class="fraction">
-                    <div class="numerator">
-                        (<i>I<sub>0</sub></i> + <i>H<sub>0</sub></i> + <i>K<sub>d</sub></i>) &minus; &radic;((<i>I<sub>0</sub></i> + <i>H<sub>0</sub></i> + <i>K<sub>d</sub></i>)<sup>2</sup> &minus; 4<i>I<sub>0</sub>H<sub>0</sub></i>)
-                    </div>
-                    <div class="denominator">2<i>I<sub>0</sub></i></div>
-                </div>
-                ]
-            </div>
-
-            <h3>2. Parameter Definitions</h3>
-            <ul>
-                <li><strong><i>F<sub>max</sub></i>:</strong> Maximal fluorescence of free dye <i>I</i>.</li>
-                <li><strong><i>K<sub>d</sub></i>:</strong> Equilibrium dissociation constant.</li>
-                <li><strong>&alpha; (Alpha):</strong> The residual fluorescence fraction of the bound complex (0 to 1).</li>
-                <li><strong>Dynamic Range (DR):</strong> The maximum signal change, calculated as <b><i>F<sub>max</sub>(1 - &alpha;)</i></b>.</li>
-            </ul>
-
-            <h3>3. Physical Interpretation</h3>
-            <p>This model accounts for cases where the bound host-dye complex is not completely dark. The parameter <i>&alpha;</i> represents the "floor" of the assay, while the quadratic term ensures accuracy even when host concentrations are sub-stoichiometric relative to the dye.</p>
+        <div class="iframe-container">
+            <iframe src="Chemosense_Theory.pdf#view=FitH">
+                <p>Your browser does not support PDF previews. 
+                   <a href="Chemosense_fitting_document.pdf">Click here to open the PDF directly.</a>
+                </p>
+            </iframe>
         </div>
-        
-        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-        
-        <p>
-            <a class="doc-link" href="Chemosense_fitting_document.docx" download>
-                📥 Download Full Whitepaper (Chemosense_fitting_document.docx)
-            </a>
-        </p>
     </div>
+
+    <footer style="margin-top: 50px; font-size: 0.8rem; color: #999; text-align: center;">
+        &copy; 2026 Chemosense Data Fitting Project
+    </footer>
 
 </body>
 </html>
