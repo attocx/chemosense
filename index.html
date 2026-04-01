@@ -7,14 +7,34 @@
     <style>
         body { font-family: sans-serif; line-height: 1.6; max-width: 800px; margin: 40px auto; padding: 20px; color: #333; }
         h1 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        .tool-card { border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 20px; transition: 0.3s; }
+        h2 { color: #2c3e50; margin-top: 0; }
+        .tool-card { border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; transition: 0.3s; }
         .tool-card:hover { border-color: #3498db; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
         .tool-link { font-weight: bold; font-size: 1.2rem; color: #3498db; text-decoration: none; }
-        /* Style for the documentation link */
+        .description { margin-top: 5px; color: #666; }
+        
+        /* Documentation Styles */
+        .theory-section { background-color: #fafafa; border-top: 3px solid #639A00; }
         .doc-link { color: #639A00; font-weight: bold; text-decoration: none; border-bottom: 1px dashed #639A00; }
         .doc-link:hover { color: #4e7a00; border-bottom-style: solid; }
-        .description { margin-top: 5px; color: #666; }
-        .meta-info { font-size: 0.9rem; color: #888; margin-top: 10px; font-style: italic; }
+        
+        /* Math Formatting */
+        .math-box { 
+            background: #fff; 
+            padding: 20px; 
+            border: 1px solid #eee; 
+            border-radius: 4px; 
+            text-align: center; 
+            margin: 20px 0; 
+            font-size: 1.2rem; 
+            font-family: 'Cambria', 'Georgia', serif;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .fraction { display: inline-block; vertical-align: middle; text-align: center; margin: 0 5px; }
+        .numerator { border-bottom: 1px solid #333; padding: 0 5px; }
+        .denominator { padding: 0 5px; }
+        .theory-content { font-family: 'Cambria', 'Georgia', serif; }
     </style>
 </head>
 <body>
@@ -24,23 +44,53 @@
 
     <div class="tool-card">
         <a class="tool-link" href="quenching.html">Fluorescence Quenching →</a>
-        <p class="description">Fit the raw fluorescence quenching data using the 1:1 binding model with dynamic range analysis.</p>
+        <p class="description">Fit raw fluorescence data using the 1:1 binding model with Dynamic Range ($DR$) and fractional dimness ($\alpha$) analysis.</p>
     </div>
 
     <div class="tool-card">
         <a class="tool-link" href="sv.html">Stern Volmer Analysis →</a>
-        <p class="description">Analyze quenching constants ($K_{SV}$ and $K_d$) and stoichiometry ($n$).</p>
+        <p class="description">Analyze quenching constants ($K_{SV}$ and $K_d$) and stoichiometry ($n$) for complex quenching regimes.</p>
     </div>
 
-    <div class="tool-card" style="background-color: #fdfdfd; border-style: dashed;">
-        <span style="font-weight: bold; font-size: 1.2rem; color: #2c3e50;">Technical Documentation</span>
-        <p class="description">
-            Detailed derivation of the fitting models, including the quadratic 1:1 binding equation and the influence of fractional dimness ($\alpha$).
-        </p>
+    <div class="tool-card theory-section" id="model-details">
+        <h2>Model Theory & Derivation</h2>
+        <p class="description">Technical framework for the "Realistic Dim Species" 1:1 binding model.</p>
+        
+        <div class="theory-content">
+            <h3>1. The 1:1 Binding Equation</h3>
+            <p>Total fluorescence <i>F</i> is derived from the conservation of mass and the equilibrium dissociation constant (<i>K<sub>d</sub></i>). Expressed in initial conditions:</p>
+            
+            <div class="math-box">
+                <i>F</i> = <i>F<sub>max</sub></i> &times; 
+                [ 1 &minus; (1 &minus; &alpha;) &times; 
+                <div class="fraction">
+                    <div class="numerator">
+                        (<i>I<sub>0</sub></i> + <i>H<sub>0</sub></i> + <i>K<sub>d</sub></i>) &minus; &radic;((<i>I<sub>0</sub></i> + <i>H<sub>0</sub></i> + <i>K<sub>d</sub></i>)<sup>2</sup> &minus; 4<i>I<sub>0</sub>H<sub>0</sub></i>)
+                    </div>
+                    <div class="denominator">2<i>I<sub>0</sub></i></div>
+                </div>
+                ]
+            </div>
+
+            <h3>2. Parameter Definitions</h3>
+            <ul>
+                <li><strong><i>F<sub>max</sub></i>:</strong> Maximal fluorescence of free dye <i>I</i>.</li>
+                <li><strong><i>K<sub>d</sub></i>:</strong> Equilibrium dissociation constant.</li>
+                <li><strong>&alpha; (Alpha):</strong> The residual fluorescence fraction of the bound complex (0 to 1).</li>
+                <li><strong>Dynamic Range (DR):</strong> The maximum signal change, calculated as <b><i>F<sub>max</sub>(1 - &alpha;)</i></b>.</li>
+            </ul>
+
+            <h3>3. Physical Interpretation</h3>
+            <p>This model accounts for cases where the bound host-dye complex is not completely dark. The parameter <i>&alpha;</i> represents the "floor" of the assay, while the quadratic term ensures accuracy even when host concentrations are sub-stoichiometric relative to the dye.</p>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        
         <p>
-            <a class="doc-link" href="Chemosense_fitting_document.docx" download>📥 Download Model Details (Word .docx)</a>
+            <a class="doc-link" href="Chemosense_fitting_document.docx" download>
+                📥 Download Full Whitepaper (Chemosense_fitting_document.docx)
+            </a>
         </p>
-        <p class="meta-info">Note: Ensure the .docx file is uploaded to the same folder as this index file.</p>
     </div>
 
 </body>
