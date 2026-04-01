@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <title>1:n Quenching Analysis Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
         body {
             font-family: "Segoe UI", Arial, sans-serif;
@@ -140,11 +148,28 @@
         .formula-box {
             background: #fff;
             border: 1px solid #ddd;
-            padding: 10px;
+            padding: 12px 14px;
             margin: 10px 0;
-            font-family: serif;
+            font-family: "Cambria Math", "STIX Two Math", "Times New Roman", serif;
             font-size: 1rem;
             text-align: center;
+            line-height: 1.45;
+            overflow-x: auto;
+        }
+        .formula-box .formula-title {
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .upload-help {
+            font-size: 0.78rem;
+            color: #444;
+            line-height: 1.45;
+            margin-top: 6px;
+        }
+        .file-note {
+            font-size: 0.75rem;
+            color: #666;
+            margin-top: 4px;
         }
 
         .strategy-notice {
@@ -233,6 +258,15 @@
 
         <h3>1. Data Input</h3>
         <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;">Upload CSV or Excel</label>
+            <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx" style="width:100%; margin-top:6px;">
+            <div class="upload-help">
+                Upload a file with two columns: first column = [H]₀ / mM, second column = Fluorescence / a.u.
+                A header row is allowed and will be ignored automatically.
+            </div>
+            <div id="fileStatus" class="file-note"></div>
+        </div>
+        <div class="control-group">
             <label style="font-size:0.85rem; font-weight: bold;">[H]₀ / mM</label>
             <textarea id="h0_input">0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 2, 5, 10</textarea>
         </div>
@@ -291,7 +325,7 @@
 
         <div class="control-group">
             <div class="label-row">
-                <span><i>K</i><sub>SV</sub> / mM⁻¹ (Dynamic Quenching) </span>
+                <span><i>k</i><sub>q</sub>·τ<sub>0</sub> / mM⁻¹</span>
                 <div class="right-side">
                     <input type="checkbox" id="fix_KSV"> Fix
                     <input type="number" id="KSV_num" class="val-input" step="0.0001" value="0.5000">
@@ -304,12 +338,18 @@
         <button id="autoFitBtn">Snap to Fit</button>
 
         <div class="formula-box">
-            <b>Quenching Model:</b><br>
-            <i>F</i> = <i>F</i>₀ · [1 - (<i>x</i>/[<i>I</i>]₀)(1 - α)] / [1 + <i>K</i><sub>SV</sub>(<i>n</i>[<i>H</i>]₀ - <i>x</i>)]
+            <div class="formula-title">Quenching Model:</div>
+            \[
+            F = \frac{F_{0}\left(1 - \frac{x}{[I]_{0}}(1-\alpha)\right)}
+            {1 + k_{q}\cdot\tau_{0}\cdot\left([H]_{0} - \frac{x}{n}\right)}
+            \]
             <hr>
-            <b>Complex Concentration (<i>x</i>):</b><br>
-            <i>x</i> = [<i>b</i> - √(<i>b</i>² - 4[<i>I</i>]₀<i>n</i>[<i>H</i>]₀)] / 2<br>
-            <small>where <i>b</i> = [<i>I</i>]₀ + <i>n</i>[<i>H</i>]₀ + <i>K</i><sub>d</sub></small>
+            <div class="formula-title">Bound complex concentration:</div>
+            \[
+            x = \frac{b - \sqrt{b^{2} - 4[I]_{0}\,n\,[H]_{0}}}{2}
+            \qquad \text{with} \qquad
+            b = [I]_{0} + n[H]_{0} + K_{d}
+            \]
         </div>
 
         <button id="resultBtn">Apply Final Labels</button>
@@ -341,7 +381,7 @@
             <strong>Fitting Strategy:</strong><br>
             1. <b>Fix n:</b> Use integers based on realistic interaction; experimentally determined with ITC or Job Plot.<br>
             2. <b>Fix α:</b> Check whether fluorescence plateaus at high [H].<br>
-            3. <b>Free Fit:</b> Let Kd and K<sub>SV</sub> solve via regression.<br>
+            3. <b>Free Fit:</b> Let Kd and k<sub>q</sub>·τ<sub>0</sub> solve via regression.<br>
             4. <b>Residuals:</b> Ensure random scatter around zero.
         </div>
         
@@ -407,6 +447,57 @@
             return NaN;
         }
 
+
+        async function handleDataFile(file) {
+            if (!file) return;
+            const name = file.name || "Selected file";
+            try {
+                let rows = [];
+
+                if (/\.(csv|txt)$/i.test(name)) {
+                    const text = await file.text();
+                    rows = text.split(/\r?\n/).map(line =>
+                        line.split(/,|\t|;+/).map(cell => String(cell).trim())
+                    );
+                } else if (/\.(xls|xlsx)$/i.test(name)) {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(buffer, { type: "array" });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
+                } else {
+                    throw new Error("Unsupported file type. Please upload CSV, TXT, XLS, or XLSX.");
+                }
+
+                const pairs = [];
+                for (const row of rows) {
+                    if (!row || row.length < 2) continue;
+                    const x = Number(String(row[0]).trim());
+                    const y = Number(String(row[1]).trim());
+                    if (Number.isFinite(x) && Number.isFinite(y)) {
+                        pairs.push([x, y]);
+                    }
+                }
+
+                if (pairs.length === 0) {
+                    throw new Error("No numeric two-column data could be read from the file.");
+                }
+
+                $("h0_input").value = pairs.map(p => p[0]).join(", ");
+                $("f_input").value = pairs.map(p => p[1]).join(", ");
+                $("fileStatus").textContent = `${name}: imported ${pairs.length} data rows.`;
+
+                const zeroPoint = pairs.find(p => Math.abs(p[0]) < 1e-12);
+                if (zeroPoint && Number.isFinite(zeroPoint[1]) && zeroPoint[1] > 0) {
+                    $("F0").value = zeroPoint[1].toFixed(4);
+                }
+
+                safeUpdate(false);
+            } catch (err) {
+                showError(err.message || "Could not read the selected file.");
+                $("fileStatus").textContent = "";
+            }
+        }
+
         function readInputs() {
             const h = parseData($("h0_input").value);
             const f = parseData($("f_input").value);
@@ -439,7 +530,7 @@
             const disc = Math.max(b * b - 4 * I0 * n * H0, 0);
             const x = (b - Math.sqrt(disc)) / 2;
 
-            const freeHostLike = Math.max(n * H0 - x, 0);
+            const freeHostLike = Math.max(H0 - x / n, 0);
             const numerator = F0 * (1 - (x / I0) * (1 - alpha));
             const denominator = 1 + KSV * freeHostLike;
             const value = numerator / denominator;
@@ -663,6 +754,12 @@
         });
 
         syncLinearPair("n", "n_num");
+
+        $("dataFile").addEventListener("change", async (event) => {
+            clearError();
+            await handleDataFile(event.target.files && event.target.files[0]);
+        });
+
         syncLinearPair("alpha", "alpha_num");
         syncLinearPair("KSV", "KSV_num");
 
@@ -686,7 +783,7 @@
 
             if (labeled) {
                 mainChart.data.datasets[1].label =
-                    `Fit | Kd=${formatKdWithUnit(Kd)} | n=${n.toFixed(4)} | α=${alpha.toFixed(4)} | KSV=${KSV.toFixed(4)} mM⁻¹`;
+                    `Fit | Kd=${formatKdWithUnit(Kd)} | n=${n.toFixed(4)} | α=${alpha.toFixed(4)} | kq·τ0=${KSV.toFixed(4)} mM⁻¹`;
             } else {
                 mainChart.data.datasets[1].label = "Fit";
             }
@@ -703,6 +800,9 @@
             resChart.update();
 
             statusBox.textContent = `R² = ${summary.r2.toFixed(4)}   |   RMSE = ${summary.rmse.toFixed(4)}   |   SSE = ${summary.ssRes.toFixed(4)}`;
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise([document.querySelector(".formula-box")]).catch(() => {});
+            }
         }
 
         function safeUpdate(labeled = false) {
@@ -957,7 +1057,7 @@
             const statsText =
                 `R² = ${summary.r2.toFixed(4)}   RMSE = ${summary.rmse.toFixed(4)}   ` +
                 `Kd = ${formatKdWithUnit(params.Kd)}   n = ${params.n.toFixed(4)}   ` +
-                `α = ${params.alpha.toFixed(4)}   KSV = ${params.KSV.toFixed(4)} mM⁻¹`;
+                `α = ${params.alpha.toFixed(4)}   kq·τ0 = ${params.KSV.toFixed(4)} mM⁻¹`;
 
             svg += textSvg(Math.round(width * 0.03), Math.round(headerH * 0.60), statsText, statsSize, "bold", "start");
 
