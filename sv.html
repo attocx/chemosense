@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>1:n Stern-Volmer Analysis Tool</title>
+    <title>Stern-Volmer Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>window.MathJax = { tex: { inlineMath: [["\\(", "\\)"]], displayMath: [["\\[", "\\]"]], processEscapes: true }, svg: { fontCache: "global" } };</script>
@@ -223,7 +223,7 @@
             padding: 3px;
             box-sizing: border-box;
         }
-\n        .upload-box {\n            background: #fff;\n            border: 1px solid #ddd;\n            padding: 10px;\n            margin-bottom: 12px;\n            border-radius: 4px;\n        }\n\n        .upload-row {\n            display: flex;\n            gap: 8px;\n            align-items: center;\n            flex-wrap: wrap;\n            margin-top: 8px;\n        }\n\n        .upload-row input[type="file"] {\n            width: 100%;\n            font-size: 0.8rem;\n        }\n\n        .upload-help {\n            font-size: 0.75rem;\n            color: #666;\n            line-height: 1.4;\n            margin-top: 6px;\n        }\n\n        .formula-box mjx-container {\n            font-size: 108% !important;\n        }\n
+\n        .upload-box {\n            background: #fff;\n            border: 1px solid #ddd;\n            padding: 10px;\n            margin-bottom: 12px;\n            border-radius: 4px;\n        }\n\n        .upload-row {\n            display: flex;\n            gap: 8px;\n            align-items: center;\n            flex-wrap: wrap;\n            margin-top: 8px;\n        }\n\n        .upload-row input[type="file"] {\n            width: 100%;\n            font-size: 0.8rem;\n        }\n\n        \n\n        .formula-box mjx-container {\n            font-size: 108% !important;\n        }\n
     </style>
 </head>
 <body>
@@ -241,8 +241,9 @@
             <div class="upload-row">
                 <input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx">
                             </div>
-            <div class="upload-help">
-                Upload a file with two columns: first column = <i>H</i><sub>0</sub> concentration (mM), second column = <i>F</i><sub>0</sub>/<i>F</i>. A header row is allowed and will be ignored automatically.
+            <div class="hint-text" style="display:block;">
+                <div>Upload a file with two columns: first column = <i>H</i><sub>0</sub> concentration (mM), second column = <i>F</i><sub>0</sub>/<i>F</i>.</div>
+                <div>A header row is allowed and will be ignored automatically.</div>
             </div>
             <div id="fileStatus" class="file-note"></div>
         </div>
@@ -257,7 +258,7 @@
 
         <div class="control-group">
             <label style="font-size:0.85rem; font-weight: bold;">[I]₀ / mM</label>
-            <input type="number" id="I0" step="0.00001" value="0.00025" style="width:100%;">
+            <input type="text" inputmode="decimal" id="I0" value="0.00025" style="width:100%;">
         </div>
 
         <h3>2. Set Parameters</h3>
@@ -279,10 +280,10 @@
                 <span>Stoichiometry (<i>n</i>)</span>
                 <div class="right-side">
                     <input type="checkbox" id="fix_n"> Fix
-                    <input type="number" id="n_num" class="val-input" step="0.0001" value="1.0000">
+                    <input type="text" inputmode="decimal" id="n_num" class="val-input" value="1.0000">
                 </div>
             </div>
-            <input type="range" id="n" min="0.1" max="5.0" step="0.01" value="1.0">
+            <input type="range" id="n" min="0.1" max="10.0" step="0.01" value="1.0">
         </div>
 
         <div class="control-group">
@@ -290,11 +291,11 @@
                 <span>α (Static Quenching)</span>
                 <div class="right-side">
                     <input type="checkbox" id="fix_alpha"> Fix
-                    <input type="number" id="alpha_num" class="val-input" step="0.0001" value="0.0000">
+                    <input type="text" inputmode="decimal" id="alpha_num" class="val-input" value="0.0010">
                 </div>
             </div>
-            <input type="range" id="alpha" min="0" max="1" step="0.01" value="0">
-            <div class="hint-text">α = complex residual brightness</div>
+            <input type="range" id="alpha" min="-4" max="0" step="0.01" value="-4">
+            <div class="hint-text">α = complex residual brightness (log slider: 0.0001–1)</div>
         </div>
 
         <div class="control-group">
@@ -302,10 +303,10 @@
                 <span><i>k</i><sub>q</sub>·τ<sub>0</sub> / mM⁻¹</span>
                 <div class="right-side">
                     <input type="checkbox" id="fix_KSV"> Fix
-                    <input type="number" id="KSV_num" class="val-input" step="0.0001" value="0.5000">
+                    <input type="text" inputmode="decimal" id="KSV_num" class="val-input" value="0.5000">
                 </div>
             </div>
-            <input type="range" id="KSV" min="0" max="50" step="0.01" value="0.5000">
+            <input type="range" id="KSV" min="0" max="100" step="0.01" value="0.5000">
         </div>
 
         <h3>3. Analysis</h3>
@@ -335,16 +336,16 @@
                 <button id="presetDoubleBtn" type="button">Preset: Double Column</button>
             </div>
             <div class="export-row">
-                Width: <input type="number" id="expWmm" value="85" step="1" style="width:70px;"> mm
-                Height: <input type="number" id="expHmm" value="110" step="1" style="width:70px;"> mm
+                Width: <input type="number" id="expWmm" value="80" step="1" style="width:70px;"> mm
+                Height: <input type="number" id="expHmm" value="88" step="1" style="width:70px;"> mm
                 DPI: <input type="number" id="expDpi" value="600" step="50" style="width:70px;">
             </div>
             <div class="export-row">
-                Axis/line scale: <input type="number" id="lineScale" value="1.2" step="0.1" style="width:60px;">
-                Font scale: <input type="number" id="fontScale" value="1.0" step="0.1" style="width:60px;">
+                Axis/line scale: <input type="number" id="lineScale" value="1.5" step="0.1" style="width:60px;">
+                Font scale: <input type="number" id="fontScale" value="1.1" step="0.1" style="width:60px;">
             </div>
             <div class="hint-text" style="text-align:left;">
-                PNG is rasterized directly from the SVG layout, so PNG and SVG should match closely.
+                Compact publication defaults are tuned for single-column style.
             </div>
             <button id="pngBtn">Export Publication PNG</button>
             <button id="svgBtn">Export SVG</button>
@@ -491,8 +492,12 @@
             return `${mMValue.toFixed(4)} mM`;
         }
 
+        function parseDecimalInput(text) {
+            return parseFloat(String(text).trim().replace(/,/g, "."));
+        }
+
         function parseKdInput(text) {
-            const raw = String(text).trim().replace(/μ/g, "µ");
+            const raw = String(text).trim().replace(/,/g, ".").replace(/μ/g, "µ");
             const match = raw.match(/^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*(nm|µm|um|mm)?$/i);
             if (!match) return NaN;
 
@@ -509,11 +514,11 @@
         function readInputs() {
             const h = parseData($("h0_input").value);
             const sv = parseData($("sv_input").value);
-            const I0 = parseFloat($("I0").value);
+            const I0 = parseDecimalInput($("I0").value);
             const Kd = parseKdInput($("Kd_num").value);
-            const n = parseFloat($("n_num").value);
-            const alpha = parseFloat($("alpha_num").value);
-            const KSV = parseFloat($("KSV_num").value);
+            const n = parseDecimalInput($("n_num").value);
+            const alpha = parseDecimalInput($("alpha_num").value);
+            const KSV = parseDecimalInput($("KSV_num").value);
 
             const errors = [];
 
@@ -574,15 +579,17 @@
             const r2 = 1 - ssRes / (ssTot || 1);
             const rmse = Math.sqrt(ssRes / sv.length);
 
-            const maxH = Math.max(...h, 1);
+            const dataMaxH = Math.max(...h);
+            const plotMaxH = dataMaxH > 0 ? dataMaxH + Math.min(dataMaxH * 0.02, 1.0) : 1;
             const curve = [];
             for (let i = 0; i <= 500; i++) {
-                const x = (i / 500) * maxH;
+                const x = (i / 500) * plotMaxH;
                 curve.push({ x, y: calculateSV(x, I0, Kd, n, alpha, KSV) });
             }
 
-            const residualRange = Math.max(1, ...resPts.map(p => Math.abs(p.y)));
-            return { dataPts, curve, resPts, r2, rmse, ssRes, residualRange, maxH };
+            const maxAbsResidual = Math.max(...resPts.map(p => Math.abs(p.y)), 0);
+            const residualRange = Math.max(maxAbsResidual * 1.2, 0.01);
+            return { dataPts, curve, resPts, r2, rmse, ssRes, residualRange, maxH: plotMaxH };
         }
 
         const mainCtx = $("svChart").getContext("2d");
@@ -620,8 +627,41 @@
                     x: {
                         type: "linear",
                         border: { width: 2, color: "black" },
+                        grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true },
+                        afterBuildTicks: (scale) => {
+                            const span = Math.max(scale.max - scale.min, 1e-9);
+                            let step = 1;
+                            if (span <= 0.1) step = 0.01;
+                            else if (span <= 0.2) step = 0.02;
+                            else if (span <= 0.5) step = 0.05;
+                            else if (span <= 1) step = 0.1;
+                            else if (span <= 2) step = 0.2;
+                            else if (span <= 5) step = 0.5;
+
+                            const decimals = step < 1 ? Math.ceil(-Math.log10(step)) : 0;
+                            const start = Math.ceil((scale.min - 1e-9) / step) * step;
+                            const end = Math.floor((scale.max + 1e-9) / step) * step;
+                            const ticks = [];
+                            for (let v = start; v <= end + step * 0.5; v += step) {
+                                ticks.push({ value: Number(v.toFixed(Math.max(decimals + 1, 4))) });
+                            }
+                            scale.ticks = ticks;
+                        },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0,
+                            font: { size: 14, weight: "bold" },
+                            color: "black",
+                            callback: (value) => {
+                                if (Math.abs(value) < 1e-12) return "0";
+                                if (Math.abs(value - Math.round(value)) < 1e-9) return String(Math.round(value));
+                                if (Math.abs(value) < 0.1) return Number(value).toFixed(2);
+                                if (Math.abs(value) < 1) return Number(value).toFixed(2);
+                                return Number(value).toFixed(1);
+                            }
+                        },
                         grid: { display: false },
-                        ticks: { font: { size: 14, weight: "bold" }, color: "black" },
                         title: {
                             display: true,
                             text: "[H]₀ / mM",
@@ -631,8 +671,16 @@
                     },
                     y: {
                         border: { width: 2, color: "black" },
-                        grid: { display: false },
-                        ticks: { font: { size: 14, weight: "bold" }, color: "black" },
+                        grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true },
+                        afterBuildTicks: (scale) => {
+                            const ticks = scale.ticks ? scale.ticks.map(t => t.value) : [];
+                            if (scale.min <= 1 && scale.max >= 1 && !ticks.some(v => Math.abs(v - 1) < 1e-9)) {
+                                ticks.push(1);
+                                ticks.sort((a, b) => a - b);
+                                scale.ticks = ticks.map(v => ({ value: v }));
+                            }
+                        },
+                        ticks: { maxTicksLimit: 10, font: { size: 14, weight: "bold" }, color: "black" },
                         title: {
                             display: true,
                             text: "F₀ / F",
@@ -645,7 +693,7 @@
                     legend: {
                         position: "top",
                         labels: {
-                            font: { size: 13, weight: "bold" },
+                            font: { size: 12, weight: "bold" },
                             usePointStyle: true,
                             color: "black"
                         }
@@ -683,8 +731,40 @@
                     x: {
                         type: "linear",
                         border: { width: 2, color: "black" },
+                        grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true },
+                        afterBuildTicks: (scale) => {
+                            const span = Math.max(scale.max - scale.min, 1e-9);
+                            let step = 1;
+                            if (span <= 0.1) step = 0.01;
+                            else if (span <= 0.2) step = 0.02;
+                            else if (span <= 0.5) step = 0.05;
+                            else if (span <= 1) step = 0.1;
+                            else if (span <= 2) step = 0.2;
+                            else if (span <= 5) step = 0.5;
+
+                            const decimals = step < 1 ? Math.ceil(-Math.log10(step)) : 0;
+                            const start = Math.ceil((scale.min - 1e-9) / step) * step;
+                            const end = Math.floor((scale.max + 1e-9) / step) * step;
+                            const ticks = [];
+                            for (let v = start; v <= end + step * 0.5; v += step) {
+                                ticks.push({ value: Number(v.toFixed(Math.max(decimals + 1, 4))) });
+                            }
+                            scale.ticks = ticks;
+                        },
                         grid: { display: false },
-                        ticks: { color: "black" },
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 0,
+                            minRotation: 0,
+                            color: "black",
+                            callback: (value) => {
+                                if (Math.abs(value) < 1e-12) return "0";
+                                if (Math.abs(value - Math.round(value)) < 1e-9) return String(Math.round(value));
+                                if (Math.abs(value) < 0.1) return Number(value).toFixed(2);
+                                if (Math.abs(value) < 1) return Number(value).toFixed(2);
+                                return Number(value).toFixed(1);
+                            }
+                        },
                         title: {
                             display: true,
                             text: "[H]₀ / mM",
@@ -694,8 +774,8 @@
                     },
                     y: {
                         border: { width: 2, color: "black" },
-                        grid: { color: "#e6e6e6" },
-                        ticks: { color: "black" },
+                        grid: { color: "#d9d9d9", drawTicks: true, drawBorder: true },
+                        ticks: { maxTicksLimit: 5, color: "black" },
                         title: {
                             display: true,
                             text: "Residual (F₀ / F)",
@@ -735,7 +815,7 @@
             });
 
             number.addEventListener("input", () => {
-                const val = parseFloat(number.value);
+                const val = parseDecimalInput(number.value);
                 if (!Number.isFinite(val)) return;
                 slider.value = clamp(val, parseFloat(slider.min), parseFloat(slider.max));
                 safeUpdate(false);
@@ -766,8 +846,44 @@
             }
         });
 
+        $("I0").addEventListener("blur", () => {
+            const val = parseDecimalInput($("I0").value);
+            if (Number.isFinite(val)) $("I0").value = val.toFixed(5);
+        });
+
+
         syncLinearPair("n", "n_num");
-        syncLinearPair("alpha", "alpha_num");
+
+        function syncAlphaFromSlider() {
+            const alphaValue = Math.pow(10, parseFloat($("alpha").value));
+            $("alpha_num").value = alphaValue.toFixed(4);
+        }
+
+        function syncAlphaSliderFromInput() {
+            const alphaValue = parseDecimalInput($("alpha_num").value);
+            if (!Number.isFinite(alphaValue) || alphaValue <= 0) return;
+            $("alpha").value = clamp(Math.log10(alphaValue), parseFloat($("alpha").min), parseFloat($("alpha").max));
+        }
+
+        $("alpha").addEventListener("input", () => {
+            syncAlphaFromSlider();
+            safeUpdate(false);
+        });
+
+        $("alpha_num").addEventListener("input", () => {
+            const val = parseDecimalInput($("alpha_num").value);
+            if (!Number.isFinite(val) || val <= 0) return;
+            syncAlphaSliderFromInput();
+            safeUpdate(false);
+        });
+
+        $("alpha_num").addEventListener("blur", () => {
+            const val = parseDecimalInput($("alpha_num").value);
+            if (Number.isFinite(val) && val > 0) {
+                $("alpha_num").value = val.toFixed(4);
+            }
+        });
+
         syncLinearPair("KSV", "KSV_num");
 
         [
@@ -800,6 +916,22 @@
                 { x: 0, y: 0 },
                 { x: summary.maxH, y: 0 }
             ];
+
+            const mainYValues = summary.dataPts.map(p => p.y).concat(summary.curve.map(p => p.y));
+            const mainYMin = Math.min(...mainYValues);
+            const mainYMax = Math.max(...mainYValues);
+            const mainYSpan = mainYMax - mainYMin || 1;
+
+            const xMinPlot = -Math.min(summary.maxH * 0.015, 0.8);
+            const xMaxPlot = summary.maxH;
+
+            mainChart.options.scales.x.min = xMinPlot;
+            mainChart.options.scales.x.max = xMaxPlot;
+            mainChart.options.scales.y.suggestedMin = mainYMin - Math.max(mainYSpan * 0.12, 0.08);
+            mainChart.options.scales.y.suggestedMax = mainYMax + Math.max(mainYSpan * 0.06, 0.05);
+
+            resChart.options.scales.x.min = xMinPlot;
+            resChart.options.scales.x.max = xMaxPlot;
             resChart.options.scales.y.suggestedMin = -1.1 * summary.residualRange;
             resChart.options.scales.y.suggestedMax = 1.1 * summary.residualRange;
 
@@ -849,7 +981,7 @@
 
             syncKdSliderFromInput();
             $("n").value = clamp(params.n, parseFloat($("n").min), parseFloat($("n").max));
-            $("alpha").value = clamp(params.alpha, parseFloat($("alpha").min), parseFloat($("alpha").max));
+            syncAlphaSliderFromInput();
             $("KSV").value = clamp(params.KSV, parseFloat($("KSV").min), parseFloat($("KSV").max));
         }
 
@@ -883,8 +1015,8 @@
                     trials.push({ key: "Kd", val: p.Kd / Math.pow(10, stepLogKd) });
                 }
                 if (!fixed.n) {
-                    trials.push({ key: "n", val: clamp(p.n + stepN, 0.1, 5.0) });
-                    trials.push({ key: "n", val: clamp(p.n - stepN, 0.1, 5.0) });
+                    trials.push({ key: "n", val: clamp(p.n + stepN, 0.1, 10.0) });
+                    trials.push({ key: "n", val: clamp(p.n - stepN, 0.1, 10.0) });
                 }
                 if (!fixed.alpha) {
                     trials.push({ key: "alpha", val: clamp(p.alpha + stepAlpha, 0, 1) });
@@ -939,18 +1071,18 @@
         $("resultBtn").addEventListener("click", () => safeUpdate(true));
 
         $("presetSingleBtn").addEventListener("click", () => {
-            $("expWmm").value = 85;
-            $("expHmm").value = 110;
+            $("expWmm").value = 80;
+            $("expHmm").value = 88;
             $("expDpi").value = 600;
-            $("lineScale").value = 1.2;
-            $("fontScale").value = 1.0;
+            $("lineScale").value = 1.5;
+            $("fontScale").value = 1.1;
         });
 
         $("presetDoubleBtn").addEventListener("click", () => {
-            $("expWmm").value = 170;
-            $("expHmm").value = 115;
+            $("expWmm").value = 160;
+            $("expHmm").value = 96;
             $("expDpi").value = 600;
-            $("lineScale").value = 1.1;
+            $("lineScale").value = 1.4;
             $("fontScale").value = 1.0;
         });
 
@@ -981,26 +1113,26 @@
             const params = readInputs();
             const summary = computeFitSummary(params);
 
-            const widthMm = Math.max(80, parseFloat($("expWmm").value) || 85);
-            const heightMm = Math.max(70, parseFloat($("expHmm").value) || 110);
-            const lineScale = Math.max(0.8, parseFloat($("lineScale").value) || 1.2);
-            const fontScale = Math.max(0.7, parseFloat($("fontScale").value) || 1.0);
+            const widthMm = Math.max(75, parseFloat($("expWmm").value) || 80);
+            const heightMm = Math.max(70, parseFloat($("expHmm").value) || 95);
+            const lineScale = Math.max(0.8, parseFloat($("lineScale").value) || 1.5);
+            const fontScale = Math.max(0.7, parseFloat($("fontScale").value) || 1.1);
 
             const width = Math.round(widthMm * 10);
             const height = Math.round(heightMm * 10);
 
-            const headerH = Math.round(height * 0.11);
-            const gap = Math.round(height * 0.012);
+            const headerH = Math.round(height * 0.14);
+            const gap = Math.round(height * 0.022);
             const plotAreaH = height - headerH - gap;
-            const mainH = Math.round(plotAreaH * 0.72);
+            const mainH = Math.round(plotAreaH * 0.74);
             const residualH = plotAreaH - mainH;
 
-            const left = Math.round(width * 0.11);
-            const right = Math.round(width * 0.03);
-            const topPad = Math.round(mainH * 0.06);
-            const bottomPadMain = Math.round(mainH * 0.12);
-            const topPadRes = Math.round(residualH * 0.08);
-            const bottomPadRes = Math.round(residualH * 0.23);
+            const left = Math.round(width * 0.09);
+            const right = Math.round(width * 0.015);
+            const topPad = Math.round(mainH * 0.03);
+            const bottomPadMain = Math.round(mainH * 0.10);
+            const topPadRes = Math.round(residualH * 0.04);
+            const bottomPadRes = Math.round(residualH * 0.18);
 
             const plotW = width - left - right;
             const mainPlotH = mainH - topPad - bottomPadMain;
@@ -1009,14 +1141,16 @@
             const mainY0 = headerH;
             const resY0 = headerH + mainH + gap;
 
-            const xMin = 0;
+            const xMin = -Math.min(summary.maxH * 0.015, 0.8);
             const xMax = summary.maxH;
 
             const yMainMin = Math.min(...summary.dataPts.map(p => p.y), ...summary.curve.map(p => p.y));
             const yMainMax = Math.max(...summary.dataPts.map(p => p.y), ...summary.curve.map(p => p.y));
-            const yMainPad = (yMainMax - yMainMin || 1) * 0.06;
-            const y1Min = yMainMin - yMainPad;
-            const y1Max = yMainMax + yMainPad;
+            const yMainSpan = (yMainMax - yMainMin || 1);
+            const yMainPadLower = Math.max(yMainSpan * 0.12, 0.08);
+            const yMainPadUpper = Math.max(yMainSpan * 0.06, 0.05);
+            const y1Min = yMainMin - yMainPadLower;
+            const y1Max = yMainMax + yMainPadUpper;
 
             const y2Min = -1.1 * summary.residualRange;
             const y2Max = 1.1 * summary.residualRange;
@@ -1025,17 +1159,28 @@
             const yMapMain = (y) => mainY0 + topPad + mainPlotH - ((y - y1Min) / (y1Max - y1Min || 1)) * mainPlotH;
             const yMapRes = (y) => resY0 + topPadRes + resPlotH - ((y - y2Min) / (y2Max - y2Min || 1)) * resPlotH;
 
-            const axisSW = (1.4 * lineScale).toFixed(2);
-            const fitSW = (1.6 * lineScale).toFixed(2);
-            const pointR = (2.6 * lineScale).toFixed(2);
-            const residualPointR = (2.1 * lineScale).toFixed(2);
-            const tickSize = Math.round(18 * fontScale);
-            const labelSize = Math.round(20 * fontScale);
-            const statsSize = Math.max(18, Math.round(width * 0.018 * fontScale));
+            const axisSW = (1.35 * lineScale).toFixed(2);
+            const fitSW = (1.95 * lineScale).toFixed(2);
+            const pointR = (2.9 * lineScale).toFixed(2);
+            const residualPointR = (2.15 * lineScale).toFixed(2);
+            const tickSize = Math.round(12 * fontScale);
+            const labelSize = Math.round(14 * fontScale);
+            const statsSize = Math.max(9, Math.round(width * 0.0095 * fontScale));
 
-            const xTicks = niceTicks(xMin, xMax, 5);
-            const yMainTicks = niceTicks(y1Min, y1Max, 5);
-            const yResTicks = niceTicks(y2Min, y2Max, 4);
+            const xTicks = niceTicks(xMin, xMax, 10);
+            const yMainTicksRaw = niceTicks(y1Min, y1Max, 10);
+            const yResTicksRaw = niceTicks(y2Min, y2Max, 10);
+
+            function sparsifyTicks(arr, maxCount) {
+                if (!Array.isArray(arr) || arr.length <= maxCount) return arr || [];
+                const step = Math.ceil(arr.length / maxCount);
+                const out = arr.filter((_, i) => i % step === 0);
+                if (out[out.length - 1] !== arr[arr.length - 1]) out.push(arr[arr.length - 1]);
+                return out;
+            }
+
+            const yMainTicks = sparsifyTicks(yMainTicksRaw, 12);
+            const yResTicks = sparsifyTicks(yResTicksRaw, 10);
 
             function textSvg(x, y, text, size, weight = "normal", anchor = "start") {
                 return `<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" fill="black">${escapeXml(text)}</text>`;
@@ -1058,30 +1203,51 @@
             svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${width} ${height}">`;
             svg += `<rect x="0" y="0" width="${width}" height="${height}" fill="white"/>`;
 
-            const statsText =
-                `R² = ${summary.r2.toFixed(4)}   RMSE = ${summary.rmse.toFixed(4)}   ` +
-                `Kd = ${formatKdWithUnit(params.Kd)}   n = ${params.n.toFixed(4)}   ` +
-                `α = ${params.alpha.toFixed(4)}   kq·τ0 = ${params.KSV.toFixed(4)} mM⁻¹`;
+            const statsTextLine1 =
+                `R² = ${summary.r2.toFixed(4)}   RMSE = ${summary.rmse.toFixed(4)}`;
+            const statsTextLine2 =
+                `Kd = ${formatKdWithUnit(params.Kd)}    |    n = ${params.n.toFixed(4)}    |    α = ${params.alpha.toFixed(4)}    |    kq·τ0 = ${params.KSV.toFixed(4)} mM⁻¹`;
 
-            svg += textSvg(Math.round(width * 0.03), Math.round(headerH * 0.60), statsText, statsSize, "bold", "start");
+            const legendX = Math.round(left + 18);
+            const legendY = Math.round(mainY0 + topPad + 18);
+            const legendGap = Math.round(58 * fontScale);
+            const legendR = Math.max(4, Math.round(4.0 * lineScale));
+
+            // Data: open circle (upper-left inside plot)
+            svg += `<circle cx="${legendX}" cy="${legendY}" r="${legendR}" fill="white" stroke="black" stroke-width="1.3"/>`;
+            svg += textSvg(legendX + 14, legendY + 5, "Data", tickSize, "bold", "start");
+
+            // Fit: line
+            svg += lineSvg(legendX + legendGap, legendY, legendX + legendGap + 24, legendY, "black", fitSW);
+            svg += textSvg(legendX + legendGap + 32, legendY + 5, "Fit", tickSize, "bold", "start");
+
+            // Statistics: lower-right inside main plot
+            const statsX = Math.round(left + plotW - 12);
+            const statsY2 = Math.round(mainY0 + topPad + mainPlotH - 12);
+            const statsY1 = Math.round(statsY2 - statsSize * 1.5);
+            svg += textSvg(statsX, statsY1, statsTextLine1, statsSize, "bold", "end");
+            svg += textSvg(statsX, statsY2, statsTextLine2, statsSize, "bold", "end");
 
             svg += lineSvg(left, mainY0 + topPad + mainPlotH, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW);
             svg += lineSvg(left, mainY0 + topPad, left, mainY0 + topPad + mainPlotH, "black", axisSW);
+            svg += lineSvg(left + plotW, mainY0 + topPad, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW);
+            svg += lineSvg(left, mainY0 + topPad, left + plotW, mainY0 + topPad, "black", axisSW);
 
             for (const t of xTicks) {
                 const x = xMap(t);
                 const yAxis = mainY0 + topPad + mainPlotH;
                 svg += lineSvg(x, yAxis, x, yAxis + 6, "black", 1);
-                svg += textSvg(x, yAxis + 28, t.toFixed(2).replace(/\.00$/, ""), tickSize, "bold", "middle");
+                svg += textSvg(x, yAxis + 28, String(t), tickSize, "bold", "middle");
             }
 
             for (const t of yMainTicks) {
                 const y = yMapMain(t);
+                if (y < topPad + mainY0 - 0.5 || y > mainY0 + topPad + mainPlotH + 0.5) continue;
                 svg += lineSvg(left - 6, y, left, y, "black", 1);
-                svg += textSvg(left - 10, y + 6, t.toFixed(2).replace(/\.00$/, ""), tickSize, "bold", "end");
+                svg += textSvg(left - 10, y + 6, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "end");
             }
 
-            svg += `<text x="${left + plotW / 2}" y="${mainY0 + mainH - 10}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black">[H]₀ / mM</text>`;
+            svg += `<text x="${left + plotW / 2}" y="${mainY0 + mainH - 12}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black">[H]₀ / mM</text>`;
             svg += `<text x="${24}" y="${mainY0 + topPad + mainPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 24 ${mainY0 + topPad + mainPlotH / 2})">F₀ / F</text>`;
 
             svg += `<polyline fill="none" stroke="black" stroke-width="${fitSW}" points="${polylinePoints(summary.curve, xMap, yMapMain)}"/>`;
@@ -1092,19 +1258,22 @@
 
             svg += lineSvg(left, resY0 + topPadRes + resPlotH, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW);
             svg += lineSvg(left, resY0 + topPadRes, left, resY0 + topPadRes + resPlotH, "black", axisSW);
+            svg += lineSvg(left + plotW, resY0 + topPadRes, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW);
+            svg += lineSvg(left, resY0 + topPadRes, left + plotW, resY0 + topPadRes, "black", axisSW);
 
             for (const t of xTicks) {
                 const x = xMap(t);
                 const yAxis = resY0 + topPadRes + resPlotH;
                 svg += lineSvg(x, yAxis, x, yAxis + 6, "black", 1);
-                svg += textSvg(x, yAxis + 28, t.toFixed(2).replace(/\.00$/, ""), tickSize, "bold", "middle");
+                svg += textSvg(x, yAxis + 28, String(t), tickSize, "bold", "middle");
             }
 
             for (const t of yResTicks) {
                 const y = yMapRes(t);
-                svg += lineSvg(left, y, left + plotW, y, "#d9d9d9", 0.8);
+                if (y < resY0 + topPadRes - 0.5 || y > resY0 + topPadRes + resPlotH + 0.5) continue;
+                svg += lineSvg(left, y, left + plotW, y, "#ebebeb", 0.6);
                 svg += lineSvg(left - 6, y, left, y, "black", 1);
-                svg += textSvg(left - 10, y + 6, t.toFixed(2).replace(/\.00$/, ""), tickSize, "bold", "end");
+                svg += textSvg(left - 10, y + 6, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "end");
             }
 
             const zeroY = yMapRes(0);
@@ -1114,7 +1283,7 @@
                 svg += `<circle cx="${xMap(p.x)}" cy="${yMapRes(p.y)}" r="${residualPointR}" fill="black"/>`;
             }
 
-            svg += `<text x="${left + plotW / 2}" y="${height - 10}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black">[H]₀ / mM</text>`;
+            // Residual x-axis title omitted in export as requested;
             svg += `<text x="${24}" y="${resY0 + topPadRes + resPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 24 ${resY0 + topPadRes + resPlotH / 2})">Residual (F₀ / F)</text>`;
 
             svg += `</svg>`;
@@ -1190,7 +1359,7 @@
 
         syncKdSliderFromInput();
         $("n").value = $("n_num").value;
-        $("alpha").value = $("alpha_num").value;
+        syncAlphaSliderFromInput();
         $("KSV").value = $("KSV_num").value;
 
         safeUpdate(false);
