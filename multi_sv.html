@@ -1,0 +1,1531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Stern-Volmer Analysis (Independent Fits)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvg@4.0.1/lib/umd.min.js"></script>
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; display: flex; margin: 0; background-color: #f4f4f9; height: 100vh; overflow: hidden; }
+        .chart-container { width: 60%; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; height: 100vh; gap: 24px; background: #fff; }
+        .main-plot-wrapper, .residual-plot-wrapper { min-height: 0; border: 1.5px solid #000; padding: 10px; background: white; }
+        .main-plot-wrapper { flex: 5; }
+        .residual-plot-wrapper { flex: 0.9; }
+        .controls { width: 40%; background: #fafafa; padding: 20px; box-shadow: -2px 0 8px rgba(0,0,0,0.1); overflow-y: auto; box-sizing: border-box; border-left: 1px solid #ddd; }
+        h3 { margin-top: 0; font-size: 0.95rem; border-bottom: 2px solid #333; padding-bottom: 5px; margin-bottom: 15px; text-transform: uppercase; }
+        .control-group { margin-bottom: 12px; }
+        .label-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; font-weight: bold; gap: 12px; }
+        .right-side { display: flex; align-items: center; gap: 6px; font-weight: normal; }
+        .val-input { width: 110px; padding: 3px; font-family: monospace; border: 1px solid #999; text-align: right; font-size: 0.9rem; }
+        textarea { width: 100%; height: 55px; font-family: monospace; font-size: 0.75rem; border: 1px solid #ccc; padding: 5px; resize: vertical; box-sizing: border-box; white-space: pre; overflow-wrap: normal; overflow-x: auto;}
+        button { width: 100%; padding: 10px; color: white; border: none; border-radius: 4px; font-size: 0.9rem; font-weight: bold; cursor: pointer; margin-top: 5px; transition: 0.2s; }
+        #autoFitBtn { background-color: #28a745; }
+        #autoFitAllBtn { background-color: #17a2b8; }
+        #resultBtn { background-color: #007bff; }
+        #pngBtn { background-color: #000; margin-top: 10px; }
+        #svgBtn { background-color: #6f42c1; margin-top: 10px; }
+        #pdfBtn { background-color: #c0392b; margin-top: 10px; }
+        #csvBtn { background-color: #1f7a4c; margin-top: 10px; }
+        #fitCsvBtn { background-color: #028090; margin-top: 10px; }
+        .theme-note { font-size: 0.72rem; color: #555; line-height: 1.35; margin-top: 6px; }
+        .export-box { background: #eee; padding: 15px; border-radius: 4px; margin-top: 10px; border: 1px solid #ccc; }
+        .export-title { font-weight: bold; font-size: 0.85rem; margin-bottom: 8px; display: block; color: #333; }
+        .export-row { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; font-size: 0.8rem; flex-wrap: wrap; }
+        .strategy-notice { margin-top: 15px; padding: 15px; background-color: #e3f2fd; border-left: 4px solid #2196f3; font-size: 0.8rem; color: #0d47a1; line-height: 1.5; }
+        .author-box { margin-top: auto; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.75rem; color: #666; text-align: center; }
+        .author-name { font-weight: bold; color: #333; display: block; margin-bottom: 2px; }
+        .author-affil { font-style: italic; display: block; margin-bottom: 4px; }
+        .author-email { color: #007bff; text-decoration: none; }
+        .error-box { display: none; margin-bottom: 15px; padding: 10px 12px; background: #fdecea; color: #8a1f17; border: 1px solid #f5c2c0; border-radius: 4px; font-size: 0.85rem; white-space: pre-line; }
+        .status-box { margin-top: 8px; font-size: 0.8rem; color: #333; min-height: 1.2em; white-space: pre-line; }
+        .fit-report { margin-top: 8px; padding: 10px 12px; background: #f6f6f6; border: 1px solid #d7d7d7; border-radius: 4px; font-size: 0.78rem; color: #222; line-height: 1.45; white-space: pre-line; max-height: 250px; overflow-y: auto; }
+        .hint-text { font-size: 0.7rem; color: #666; text-align: right; margin-top: 2px; }
+        .upload-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+        .upload-row input[type="file"] { flex: 1; min-width: 0; }
+        .file-note { font-size: 0.78rem; color: #0d47a1; margin-top: 6px; min-height: 1.2em; }
+        input[type="range"] { width: 100%; box-sizing: border-box; }
+        input[type="number"] { border: 1px solid #ccc; padding: 3px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+    <div class="chart-container">
+        <div class="main-plot-wrapper"><canvas id="svChart"></canvas></div>
+        <div class="residual-plot-wrapper"><canvas id="residualChart"></canvas></div>
+    </div>
+
+    <div class="controls">
+        <div id="errorBox" class="error-box"></div>
+
+        <h3>1. Data Input</h3>
+        <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;">Upload CSV or Excel</label>
+            <div class="upload-row"><input type="file" id="dataFile" accept=".csv,.txt,.xls,.xlsx"></div>
+            <div class="hint-text" style="display:block; text-align: left;"><div>Upload a file: Col 1 = [H]₀, Cols 2+ = F₀/F (for different conditions).</div></div>
+            <div id="fileStatus" class="file-note"></div>
+        </div>
+        <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;">[H]₀ / mM</label>
+            <textarea id="h0_input">0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4, 0.6, 0.8, 1, 2, 5, 10</textarea>
+        </div>
+        <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;"><i>F</i>₀ / <i>F</i> (One condition per line)</label>
+            <textarea id="sv_input" style="height: 70px;">1, 1.1000, 1.1954, 1.4840, 1.9189, 2.5929, 3.5311, 4.1316, 4.6067, 4.9550, 5.7680, 6.5134, 6.9227
+1, 1.0500, 1.1200, 1.3000, 1.6500, 2.1000, 2.8000, 3.3000, 3.6500, 3.9000, 4.5000, 5.1000, 5.4000</textarea>
+        </div>
+        <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;">Condition Labels (One per line)</label>
+            <textarea id="labels_input" style="height: 45px;">Condition A
+Condition B</textarea>
+        </div>
+        <div class="control-group">
+            <label style="font-size:0.85rem; font-weight: bold;">[I]₀ / mM</label>
+            <input type="text" inputmode="decimal" id="I0" step="0.00001" value="0.00025" style="width:100%;">
+        </div>
+
+        <h3>2. Set Parameters</h3>
+        
+        <div class="control-group" style="background: #e9ecef; padding: 10px; border-radius: 4px; border: 1px solid #ced4da; margin-bottom: 15px;">
+            <div class="label-row" style="margin-bottom: 5px;"><span>Active Dataset (Tuning & Fitting)</span></div>
+            <select id="activeDatasetIndex" class="val-input" style="width:100%; text-align:left; font-size: 0.95rem; padding: 5px;"></select>
+            <div class="hint-text" style="text-align: left; margin-top: 5px;">Sliders and "Fix" constraints apply to the selection above. "All Sets" can either fit each condition independently or perform one shared global fit across all conditions.</div>
+            <div class="export-row" style="margin-top:8px; margin-bottom:0;">
+                All Sets mode:
+                <select id="allSetsMode" style="width:170px;">
+                    <option value="copy" selected>Independent fits</option>
+                    <option value="global">Global shared fit</option>
+                </select>
+            </div>
+            <div class="hint-text" style="text-align: left; margin-top: 5px;">Global shared n/α fit uses one common n and α across every condition, while Kd and kq·τ0 remain condition-specific when "All Sets" is selected.</div>
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
+                <span><i>K</i><sub>d</sub></span>
+                <div class="right-side"><input type="checkbox" id="fix_Kd"> Fix <input type="text" id="Kd_num" class="val-input" value="100.0000 nM"></div>
+            </div>
+            <input type="range" id="Kd" min="-7" max="2" step="0.01" value="-4">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
+                <span>Stoichiometry (<i>n</i>)</span>
+                <div class="right-side"><input type="checkbox" id="fix_n"> Fix <input type="text" inputmode="decimal" id="n_num" class="val-input" step="0.0001" value="1.0000"></div>
+            </div>
+            <input type="range" id="n" min="0.1" max="10" step="0.01" value="1.0">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
+                <span>α (Static Quenching)</span>
+                <div class="right-side"><input type="checkbox" id="fix_alpha"> Fix <input type="text" inputmode="decimal" id="alpha_num" class="val-input" step="0.0001" value="0.0000"></div>
+            </div>
+            <input type="range" id="alpha" min="0" max="1" step="0.0001" value="0.5000">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
+                <span><i>k</i><sub>q</sub>·τ<sub>0</sub> / mM⁻¹</span>
+                <div class="right-side"><input type="checkbox" id="fix_KSV"> Fix <input type="text" inputmode="decimal" id="KSV_num" class="val-input" step="0.0001" value="0.5000"></div>
+            </div>
+            <input type="range" id="KSV" min="0" max="1" step="0.0001" value="0.6165">
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
+                <span>Weighted Fitting</span>
+                <div class="right-side">
+                    <select id="weightMode" class="val-input" style="width:140px; text-align:left;">
+                        <option value="none">None</option><option value="invF">1 / (F₀ / F)</option><option value="invF2">1 / (F₀ / F)²</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <h3>3. Analysis</h3>
+        <button id="autoFitBtn">Snap to Fit All</button>
+        <div style="display:flex; gap:10px; margin-top:8px;">
+            <button id="clearExcludedBtn" type="button" style="background-color:#6c757d;">Clear Excluded Points</button>
+        </div>
+
+        <button id="resultBtn">Apply Final Labels</button>
+        <div id="statusBox" class="status-box"></div>
+        <h3 style="margin-top:18px;">4. Report</h3>
+        <div id="fitReportBox" class="fit-report">Fit report will appear here after update.</div>
+
+        <div class="export-box">
+            <span class="export-title">Publication Export Settings</span>
+            <div class="export-row">
+                Journal theme:
+                <select id="journalTheme" style="width:150px;">
+                    <option value="wiley" selected>Wiley</option><option value="nature">Nature</option><option value="acs">ACS</option><option value="rsc">RSC</option><option value="elsevier">Elsevier</option>
+                </select>
+            </div>
+            <div class="theme-note" id="journalThemeNote">Publisher-inspired preset.</div>
+            <div class="export-row">
+                Width: <input type="number" id="expWmm" value="80" step="1" style="width:70px;"> mm
+                Height: <input type="number" id="expHmm" value="88" step="1" style="width:70px;"> mm
+                DPI: <input type="number" id="expDpi" value="600" step="50" style="width:70px;">
+            </div>
+            <div class="export-row">
+                Axis/frame scale: <input type="number" id="lineScale" value="1.0" step="0.1" style="width:60px;">
+                Font scale: <input type="number" id="fontScale" value="1.0" step="0.1" style="width:60px;">
+            </div>
+            <div class="export-row">
+                Stats block:
+                <select id="statsPlacement" style="width:100px;">
+                    <option value="off" selected>Off</option><option value="top">Top</option>
+                </select>
+                Residual analysis:
+                <select id="residualPlacement" style="width:100px;">
+                    <option value="off">Off</option><option value="bottom" selected>Bottom</option>
+                </select>
+                <label><input type="checkbox" id="exportLogX"> Log X</label>
+            </div>
+            <button id="pngBtn">Export Publication PNG</button>
+            <button id="svgBtn">Export SVG</button>
+            <button id="pdfBtn">Export PDF</button>
+            <div style="display:flex; gap:10px;">
+                <button id="csvBtn">Export Data CSV</button>
+                <button id="fitCsvBtn">Export Fit CSV</button>
+            </div>
+        </div>
+        
+        <div class="author-box">
+            <span class="author-name">Hongbin Wu</span>
+            <span class="author-affil">AG Cordes / TU Dortmund</span>
+            <a href="mailto:hongbin.wu@tu-dortmund.de" class="author-email">hongbin.wu@tu-dortmund.de</a>
+        </div>
+    </div>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const errorBox = $("errorBox");
+        const statusBox = $("statusBox");
+        const fitReportBox = $("fitReportBox");
+        
+        let lastFitDiagnosticsArray = null;
+        let paramsStore = []; 
+        let excludedIndices = new Set();
+
+        const PALETTE = ["black", "#d62728", "#1f77b4", "#2ca02c", "#9467bd", "#8c564b", "#e377c2", "#ff7f0e"];
+
+        Chart.defaults.font.family = "Arial, Helvetica, sans-serif";
+        Chart.defaults.color = "#000";
+
+        const JOURNAL_THEMES = {
+            wiley: { width: 80, height: 88, dpi: 600, lineScale: 1.0, fontScale: 0.95, palette: "mono", note: "Wiley-inspired preset." },
+            nature: { width: 86, height: 78, dpi: 600, lineScale: 0.85, fontScale: 0.80, palette: "mono", note: "Nature-inspired preset." },
+            acs: { width: 85, height: 82, dpi: 600, lineScale: 0.90, fontScale: 0.78, palette: "mono", note: "ACS-inspired preset." },
+            rsc: { width: 80, height: 74, dpi: 600, lineScale: 0.95, fontScale: 0.88, palette: "mono", note: "RSC-inspired preset." },
+            elsevier: { width: 90, height: 82, dpi: 600, lineScale: 0.75, fontScale: 1.00, palette: "color", note: "Elsevier-inspired preset." }
+        };
+
+        function applyJournalTheme(themeKey) {
+            const theme = JOURNAL_THEMES[themeKey] || JOURNAL_THEMES.wiley;
+            $("expWmm").value = theme.width;
+            $("expHmm").value = theme.height;
+            $("expDpi").value = theme.dpi;
+            $("lineScale").value = theme.lineScale.toFixed(2);
+            $("fontScale").value = theme.fontScale.toFixed(2);
+            if ($("journalThemeNote")) $("journalThemeNote").textContent = theme.note;
+        }
+
+        // --- Significant Figure Formatters ---
+        function formatWithSigFigs(val, err) {
+            const errMag = Math.floor(Math.log10(Math.abs(err)));
+            const errRounded = Number(err.toPrecision(1));
+            const newErrMag = Math.floor(Math.log10(Math.abs(errRounded)));
+            
+            let valStr, errStr;
+            
+            if (newErrMag >= 0) {
+                const factor = Math.pow(10, newErrMag);
+                const valRounded = Math.round(val / factor) * factor;
+                valStr = valRounded.toFixed(0);
+                errStr = errRounded.toFixed(0);
+            } else {
+                const decimals = -newErrMag;
+                const factor = Math.pow(10, decimals);
+                const valRounded = Math.round(val * factor) / factor;
+                valStr = valRounded.toFixed(decimals);
+                errStr = errRounded.toFixed(decimals);
+            }
+            return { valStr, errStr };
+        }
+
+        function formatKdWithSigFigs(kd_mM, err_mM) {
+            if (!Number.isFinite(kd_mM)) return "n/a";
+            
+            let multiplier = 1;
+            let unit = "mM";
+            if (kd_mM < 1e-3) { multiplier = 1e6; unit = "nM"; }
+            else if (kd_mM < 1) { multiplier = 1e3; unit = "µM"; }
+            
+            const val = kd_mM * multiplier;
+            
+            if (!Number.isFinite(err_mM) || err_mM <= 0) {
+                const mag = val === 0 ? 0 : Math.floor(Math.log10(Math.abs(val)));
+                const dec = Math.max(0, 3 - mag);
+                return `${val.toFixed(dec)} ${unit}`;
+            }
+            
+            const err = err_mM * multiplier;
+            const res = formatWithSigFigs(val, err);
+            return `${res.valStr} ± ${res.errStr} ${unit}`;
+        }
+
+        function formatNormalWithSigFigs(val, err) {
+            if (!Number.isFinite(val)) return "n/a";
+            if (!Number.isFinite(err) || err <= 0) {
+                if (val === 0) return "0.000";
+                const mag = Math.floor(Math.log10(Math.abs(val)));
+                const dec = Math.max(0, 3 - mag); 
+                return val.toFixed(dec);
+            }
+            const res = formatWithSigFigs(val, err);
+            return `${res.valStr} ± ${res.errStr}`;
+        }
+
+        function formatKdWithUnit(mMValue) { return formatKdWithSigFigs(mMValue, 0); }
+
+        function parseData(text) { return text.split(/[\s,;]+/).map(v => v.trim()).filter(v => v !== "").map(Number).filter(v => Number.isFinite(v)); }
+        function showError(msg) { errorBox.style.display = "block"; errorBox.textContent = msg; }
+        function clearError() { errorBox.style.display = "none"; errorBox.textContent = ""; }
+        function escapeXml(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;"); }
+
+        function parseKdInput(text) {
+            const raw = String(text).trim().replace(/μ/g, "µ");
+            const match = raw.match(/^([+-]?\d*\.?\d+(?:e[+-]?\d+)?)\s*(nm|µm|um|mm)?$/i);
+            if (!match) return NaN;
+            const value = Number(match[1]);
+            const unit = (match[2] || "mM").toLowerCase();
+            if (!Number.isFinite(value) || value <= 0) return NaN;
+            if (unit === "nm") return value * 1e-6;
+            if (unit === "µm" || unit === "um") return value * 1e-3;
+            if (unit === "mm") return value;
+            return NaN;
+        }
+
+        function syncDatasetCount() {
+            const svLines = $("sv_input").value.split(/\r?\n/).filter(l => l.trim() !== "");
+            const numSets = svLines.length;
+            const labelsLines = $("labels_input") ? $("labels_input").value.split(/\r?\n/).filter(l => l.trim() !== "") : [];
+            const labels = Array.from({length: numSets}).map((_, i) => labelsLines[i] || `Condition ${i+1}`);
+
+            const oldStore = paramsStore;
+            paramsStore = [];
+            for (let i = 0; i < numSets; i++) {
+                if (oldStore[i]) {
+                    paramsStore.push(oldStore[i]);
+                } else {
+                    paramsStore.push({
+                        Kd: 1e-4, n: 1.0, alpha: 0.0, KSV: 0.5,
+                        fix_Kd: false, fix_n: false, fix_alpha: false, fix_KSV: false
+                    });
+                }
+            }
+
+            const select = $("activeDatasetIndex");
+            if (!select) return;
+            const currentVal = select.value;
+            select.innerHTML = "";
+            
+            const optAll = document.createElement("option");
+            optAll.value = "all";
+            optAll.textContent = "All Sets";
+            select.appendChild(optAll);
+
+            for (let i = 0; i < numSets; i++) {
+                const opt = document.createElement("option");
+                opt.value = i;
+                opt.textContent = labels[i];
+                select.appendChild(opt);
+            }
+            if (currentVal === "all" || (currentVal && currentVal !== "all" && parseInt(currentVal) < numSets)) select.value = currentVal;
+            else select.value = "all";
+
+            loadActiveParamsToUI();
+        }
+
+        $("sv_input").addEventListener("input", () => { syncDatasetCount(); safeUpdate(false); });
+        $("labels_input").addEventListener("input", () => { syncDatasetCount(); safeUpdate(false); });
+
+        function isGlobalSharedMode() {
+            return $("activeDatasetIndex").value === "all" && $("allSetsMode") && $("allSetsMode").value === "global";
+        }
+
+        function buildSingleDataset(baseDataset, idx, shared = null) {
+            const p = paramsStore[idx] || { Kd: 1e-4, n: 1, alpha: 0, KSV: 0.5 };
+            return {
+                h: baseDataset.h,
+                sv: baseDataset.sv_arrays[idx],
+                I0: baseDataset.I0,
+                Kd: p.Kd,
+                n: shared && Number.isFinite(shared.n) ? shared.n : p.n,
+                alpha: shared && Number.isFinite(shared.alpha) ? shared.alpha : p.alpha,
+                KSV: p.KSV,
+                weightMode: baseDataset.weightMode,
+                included: baseDataset.included_arrays[idx]
+            };
+        }
+
+        function buildCombinedDataset(baseDataset) {
+            const combined = { h: [], sv: [], I0: baseDataset.I0, weightMode: baseDataset.weightMode, included: [] };
+            for (let d = 0; d < baseDataset.sv_arrays.length; d++) {
+                for (let i = 0; i < baseDataset.h.length; i++) {
+                    combined.h.push(baseDataset.h[i]);
+                    combined.sv.push(baseDataset.sv_arrays[d][i]);
+                    combined.included.push(baseDataset.included_arrays[d][i]);
+                }
+            }
+            return combined;
+        }
+
+        function weightedResidualVectorSharedNA(sharedParams, baseDataset) {
+            const residuals = [];
+            for (let d = 0; d < baseDataset.sv_arrays.length; d++) {
+                const p = paramsStore[d] || { Kd: 1e-4, KSV: 0.5 };
+                const sv = baseDataset.sv_arrays[d];
+                const weights = getPointWeights(sv, baseDataset.weightMode || "none");
+                const included = baseDataset.included_arrays[d];
+                for (let i = 0; i < baseDataset.h.length; i++) {
+                    if (!included[i]) continue;
+                    const pred = calculateSV(baseDataset.h[i], baseDataset.I0, p.Kd, sharedParams.n, sharedParams.alpha, p.KSV);
+                    if (!Number.isFinite(pred)) return null;
+                    residuals.push((sv[i] - pred) * Math.sqrt(weights[i]));
+                }
+            }
+            return residuals;
+        }
+
+        function globalModeLabel() {
+            return ($("allSetsMode") && $("allSetsMode").value === "global") ? "Global shared n/α fit" : "Independent fits";
+        }
+
+
+        function loadActiveParamsToUI() {
+            const select = $("activeDatasetIndex");
+            if (!select) return;
+            const val = select.value;
+            const activeIdx = val === "all" ? 0 : parseInt(val);
+            if (!paramsStore[activeIdx]) return;
+            const p = paramsStore[activeIdx];
+
+            $("Kd_num").value = formatKdWithUnit(p.Kd);
+            $("n_num").value = p.n.toFixed(4);
+            $("alpha_num").value = p.alpha.toFixed(4);
+            $("KSV_num").value = p.KSV.toFixed(4);
+
+            syncKdSliderFromInput();
+            $("n").value = clamp(p.n, parseFloat($("n").min), parseFloat($("n").max));
+            $("alpha").value = alphaToSlider(p.alpha);
+            $("KSV").value = KSVToSlider(p.KSV);
+
+            $("fix_Kd").checked = p.fix_Kd;
+            $("fix_n").checked = p.fix_n;
+            $("fix_alpha").checked = p.fix_alpha;
+            $("fix_KSV").checked = p.fix_KSV;
+
+            const fitBtn = $("autoFitBtn");
+            if (fitBtn) fitBtn.textContent = val === "all" ? (isGlobalSharedMode() ? "Snap to Global Fit" : "Snap to Fit All") : "Snap to Fit Active";
+        }
+
+        function saveActiveParamsFromUI() {
+            const select = $("activeDatasetIndex");
+            if (!select) return;
+            const val = select.value;
+
+            const newParams = {
+                Kd: parseKdInput($("Kd_num").value) || 1e-4,
+                n: parseFloat($("n_num").value) || 1.0,
+                alpha: parseFloat(normalizeDotDecimal($("alpha_num").value)) || 0,
+                KSV: parseFloat(normalizeDotDecimal($("KSV_num").value)) || 0.5,
+                fix_Kd: $("fix_Kd").checked,
+                fix_n: $("fix_n").checked,
+                fix_alpha: $("fix_alpha").checked,
+                fix_KSV: $("fix_KSV").checked
+            };
+
+            if (val === "all") {
+                for (let i = 0; i < paramsStore.length; i++) {
+                    paramsStore[i] = { ...newParams };
+                }
+            } else {
+                const activeIdx = parseInt(val);
+                if (paramsStore[activeIdx]) paramsStore[activeIdx] = newParams;
+            }
+        }
+
+        $("activeDatasetIndex").addEventListener("change", () => {
+            loadActiveParamsToUI();
+            safeUpdate(false);
+        });
+        if ($("allSetsMode")) {
+            $("allSetsMode").addEventListener("change", () => {
+                loadActiveParamsToUI();
+                safeUpdate(false);
+            });
+        }
+
+        async function handleDataFile(file) {
+            if (!file) return;
+            const name = file.name || "Selected file";
+            try {
+                let rows = [];
+                if (/\.(csv|txt)$/i.test(name)) {
+                    const text = await file.text();
+                    rows = text.split(/\r?\n/).map(line => line.split(/,|\t|;+/).map(cell => String(cell).trim()));
+                } else if (/\.(xls|xlsx)$/i.test(name)) {
+                    const buffer = await file.arrayBuffer();
+                    const workbook = XLSX.read(buffer, { type: "array" });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, raw: false });
+                } else throw new Error("Unsupported file type.");
+
+                let h = [];
+                let sv_cols = [];
+                let headers = [];
+
+                if (rows.length > 0) {
+                    const firstVal = Number(String(rows[0][0]).trim());
+                    if (!Number.isFinite(firstVal)) {
+                        for(let i=1; i<rows[0].length; i++) headers.push(String(rows[0][i] || `Condition ${i}`).trim());
+                    }
+                }
+
+                for (const row of rows) {
+                    if (!row || row.length < 2) continue;
+                    const x = Number(String(row[0]).trim());
+                    if (!Number.isFinite(x)) continue;
+                    h.push(x);
+                    for (let i = 1; i < row.length; i++) {
+                        const y = Number(String(row[i]).trim());
+                        if (!sv_cols[i-1]) sv_cols[i-1] = [];
+                        sv_cols[i-1].push(Number.isFinite(y) ? y : NaN);
+                    }
+                }
+                if (h.length === 0) throw new Error("No numeric data found.");
+                if (headers.length === 0) {
+                    for(let i=0; i<sv_cols.length; i++) headers.push(`Condition ${i+1}`);
+                }
+
+                $("h0_input").value = h.join(", ");
+                $("sv_input").value = sv_cols.map(col => col.join(", ")).join("\n");
+                if ($("labels_input")) $("labels_input").value = headers.join("\n");
+
+                $("fileStatus").textContent = `${name}: imported ${sv_cols.length} datasets.`;
+                forceDotDecimals();
+                syncDatasetCount();
+                safeUpdate(false);
+            } catch (err) {
+                showError(err.message || "Could not read the selected file.");
+                $("fileStatus").textContent = "";
+            }
+        }
+
+        function readInputs() {
+            forceDotDecimals();
+            const h = parseData($("h0_input").value);
+            const svLines = $("sv_input").value.split(/\r?\n/).filter(l => l.trim() !== "");
+            const sv_arrays = svLines.map(parseData);
+            const labelsLines = $("labels_input") ? $("labels_input").value.split(/\r?\n/).filter(l => l.trim() !== "") : [];
+            const labels = sv_arrays.map((_, i) => labelsLines[i] || `Condition ${i+1}`);
+            const I0 = parseFloat(normalizeDotDecimal($("I0").value));
+            const weightMode = $("weightMode").value || "none";
+
+            const errors = [];
+            if (h.length === 0) errors.push("No valid [H]₀ values found.");
+            if (sv_arrays.length === 0) errors.push("No valid F₀/F values found.");
+            if (sv_arrays.some(sv => sv.length !== h.length)) errors.push(`[H]₀ and every F₀/F condition must have the same length.`);
+            if (sv_arrays.some(sv => sv.some(v => !Number.isFinite(v)))) errors.push(`Every condition must contain numeric F₀/F values only.`);
+            if (!Number.isFinite(I0) || I0 <= 0) errors.push("[I]₀ must be a positive number.");
+            if (h.some(v => v < 0)) errors.push("[H]₀ values must be non-negative.");
+
+            if (errors.length > 0) throw new Error(errors.join("\n"));
+
+            const included_arrays = [];
+            for (let d = 0; d < sv_arrays.length; d++) {
+                included_arrays.push(h.map((_, i) => !excludedIndices.has(`${d},${i}`)));
+            }
+
+            return { h, sv_arrays, labels, I0, weightMode, included_arrays };
+        }
+
+        function calculateSV(H0, I0, Kd, n, alpha, KSV) {
+            const b = I0 + n * H0 + Kd;
+            const disc = Math.max(b * b - 4 * I0 * n * H0, 0);
+            const x = (b - Math.sqrt(disc)) / 2;
+            const freeHostLike = Math.max(H0 - x / n, 0);
+            const numerator = 1 + KSV * freeHostLike;
+            const denominator = 1 - (x / I0) * (1 - alpha);
+            const value = numerator / denominator;
+            return Number.isFinite(value) ? value : NaN;
+        }
+
+        function getPointWeights(sv, mode) {
+            const eps = 1e-12;
+            return sv.map((value) => {
+                const v = Math.max(Math.abs(value), eps);
+                if (mode === "invF") return 1 / v;
+                if (mode === "invF2") return 1 / (v * v);
+                return 1;
+            });
+        }
+
+        function activeIndices(dataset) {
+            const included = Array.isArray(dataset.included) ? dataset.included : dataset.h.map(() => true);
+            return included.map((flag, i) => flag ? i : -1).filter(i => i >= 0);
+        }
+
+        function weightedResidualVector(params, dataset) {
+            const weights = getPointWeights(dataset.sv, dataset.weightMode || "none");
+            const residuals = [];
+            const ids = activeIndices(dataset);
+            for (const i of ids) {
+                const pred = calculateSV(dataset.h[i], dataset.I0, params.Kd, params.n, params.alpha, params.KSV);
+                if (!Number.isFinite(pred)) return null;
+                residuals.push((dataset.sv[i] - pred) * Math.sqrt(weights[i]));
+            }
+            return residuals;
+        }
+
+        function computeFitSummary(params, datasetIndex = 0) {
+            const { h, sv, I0, Kd, n, alpha, KSV, weightMode } = params;
+            const included = Array.isArray(params.included) ? params.included : h.map(() => true);
+
+            const includedDataPts = [], excludedDataPts = [];
+            const includedResPts = [], excludedResPts = [];
+            const preds = [];
+            const weights = getPointWeights(sv, weightMode || "none");
+            let weightedSSE = 0, ssRes = 0, ssTot = 0;
+            const activeSV = [];
+            const excludedPointIndices = [];
+            let minDenominator = Infinity;
+            let negativeDiscCount = 0;
+            let clippedDiscCount = 0;
+
+            for (let i = 0; i < h.length; i++) {
+                const H0 = h[i];
+                const b = I0 + n * H0 + Kd;
+                const discRaw = b * b - 4 * I0 * n * H0;
+                if (discRaw < 0) {
+                    negativeDiscCount += 1;
+                    if (discRaw < -1e-12) clippedDiscCount += 1;
+                }
+                const disc = Math.max(discRaw, 0);
+                const x = (b - Math.sqrt(disc)) / 2;
+                const denominator = 1 - (x / I0) * (1 - alpha);
+                minDenominator = Math.min(minDenominator, Math.abs(denominator));
+                const pred = calculateSV(H0, I0, Kd, n, alpha, KSV);
+                preds.push(pred);
+                const dataPoint = { x: H0, y: sv[i] };
+                const resPoint = { x: H0, y: sv[i] - pred, pointIndex: i, datasetIndex };
+                if (included[i]) {
+                    includedDataPts.push(dataPoint);
+                    includedResPts.push(resPoint);
+                    activeSV.push(sv[i]);
+                } else {
+                    excludedDataPts.push(dataPoint);
+                    excludedResPts.push(resPoint);
+                    excludedPointIndices.push(i);
+                }
+            }
+
+            if (preds.some(v => !Number.isFinite(v))) throw new Error("Model returned invalid values.");
+
+            const nActive = activeSV.length;
+            const meanY = nActive ? activeSV.reduce((a, b) => a + b, 0) / nActive : 0;
+
+            for (let i = 0; i < sv.length; i++) {
+                if (!included[i]) continue;
+                const resid = sv[i] - preds[i];
+                ssRes += resid ** 2;
+                ssTot += (sv[i] - meanY) ** 2;
+                weightedSSE += weights[i] * resid ** 2;
+            }
+
+            const r2 = nActive ? (1 - ssRes / (ssTot || 1)) : NaN;
+            const rmse = nActive ? Math.sqrt(ssRes / nActive) : NaN;
+            const weightedRMSE = nActive ? Math.sqrt(weightedSSE / nActive) : NaN;
+
+            const dataMaxH = Math.max(...h, 0);
+            const plotMaxH = dataMaxH > 0 ? dataMaxH + Math.min(Math.max(dataMaxH * 0.08, 0.01), 0.08) : 1;
+            const curve = [];
+            for (let i = 0; i <= 500; i++) {
+                const x = (i / 500) * plotMaxH;
+                curve.push({ x, y: calculateSV(x, I0, Kd, n, alpha, KSV) });
+            }
+
+            const allResPts = includedResPts.concat(excludedResPts);
+            const maxAbsResidual = Math.max(0, ...allResPts.map(p => Math.abs(p.y)));
+            const residualRange = Math.max(maxAbsResidual * 1.2, 0.01);
+            return {
+                includedDataPts, excludedDataPts, curve, includedResPts, excludedResPts,
+                preds, r2, rmse, weightedRMSE, ssRes, weightedSSE, residualRange, maxH: plotMaxH, dataMaxH, weights,
+                includedCount: nActive, excludedCount: included.length - nActive,
+                excludedPointIndices, minDenominator, negativeDiscCount, clippedDiscCount
+            };
+        }
+
+        const mainCtx = $("svChart").getContext("2d");
+        const resCtx = $("residualChart").getContext("2d");
+
+        const mainChart = new Chart(mainCtx, {
+            type: "scatter", data: { datasets: [] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    x: { type: "linear", border: { width: 2, color: "black" }, grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true }, title: { display: true, text: "[H]₀ / mM", font: { size: 13, weight: "bold" }, color: "black" } },
+                    y: { beginAtZero: true, min: 0, border: { width: 2, color: "black" }, grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true }, title: { display: true, text: "F₀ / F", font: { size: 13, weight: "bold" }, color: "black" } }
+                },
+                plugins: { legend: { position: "top", align: "end", labels: { boxWidth: 14, boxHeight: 14, usePointStyle: true, color: "black" } } }
+            }
+        });
+
+        const resChart = new Chart(resCtx, {
+            type: "scatter", data: { datasets: [] },
+            options: {
+                responsive: true, maintainAspectRatio: false, animation: false,
+                scales: {
+                    x: { type: "linear", border: { width: 2, color: "black" }, grid: { display: false, drawOnChartArea: false, drawTicks: true, drawBorder: true }, title: { display: true, text: "[H]₀ / mM", font: { size: 11, weight: "bold" }, color: "black" } },
+                    y: { border: { width: 2, color: "black" }, grid: { color: "#d9d9d9", drawTicks: true, drawBorder: true }, title: { display: true, text: "Residual (F₀ / F)", font: { size: 11, weight: "bold" }, color: "black" } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        function clamp(value, min, max) { return Math.min(Math.max(value, min), max); }
+        function alphaToSlider(alpha) { if (!Number.isFinite(alpha) || alpha <= 0) return 0; const a = clamp(alpha, 1e-4, 1); return (Math.log10(a) + 4) / 4; }
+        function sliderToAlpha(t) { const tt = clamp(t, 0, 1); return Math.pow(10, -4 + 4 * tt); }
+        function normalizeDotDecimal(value) { return String(value).replace(/,/g, "."); }
+        function forceDotDecimals() { ["Kd_num", "n_num", "alpha_num", "KSV_num", "I0"].forEach((id) => { const el = $(id); if (el) el.value = normalizeDotDecimal(el.value); }); }
+
+        function syncAlphaFromSlider() { const t = parseFloat($("alpha").value); const alpha = sliderToAlpha(Number.isFinite(t) ? t : 0.5); $("alpha_num").value = alpha.toFixed(4); }
+        function syncAlphaFromNumber() { let alpha = parseFloat(normalizeDotDecimal($("alpha_num").value)); if (!Number.isFinite(alpha)) alpha = 0.01; alpha = clamp(alpha, 0, 1); $("alpha_num").value = alpha.toFixed(4); $("alpha").value = alphaToSlider(alpha); }
+        function KSVToSlider(KSV) { if (!Number.isFinite(KSV) || KSV <= 0) return 0; const v = clamp(KSV, 1e-3, 100); return (Math.log10(v) + 3) / 5; }
+        function sliderToKSV(t) { const tt = clamp(Number.isFinite(t) ? t : 0.5, 0, 1); return Math.pow(10, -3 + 5 * tt); }
+        function syncKSVFromSlider() { const t = parseFloat($("KSV").value); const KSV = sliderToKSV(t); $("KSV_num").value = KSV.toFixed(4); }
+        function syncKSVFromNumber() { let KSV = parseFloat(normalizeDotDecimal($("KSV_num").value)); if (!Number.isFinite(KSV)) KSV = 0.5; KSV = clamp(KSV, 0, 100); $("KSV_num").value = KSV.toFixed(4); $("KSV").value = KSVToSlider(KSV); }
+        function syncKdFromSlider() { const kd_mM = Math.pow(10, parseFloat($("Kd").value)); $("Kd_num").value = formatKdWithUnit(kd_mM); }
+        function syncKdSliderFromInput() { const kd_mM = parseKdInput($("Kd_num").value); if (!Number.isFinite(kd_mM) || kd_mM <= 0) return; $("Kd").value = clamp(Math.log10(kd_mM), parseFloat($("Kd").min), parseFloat($("Kd").max)); }
+
+        $("Kd").addEventListener("input", () => { syncKdFromSlider(); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("Kd_num").addEventListener("input", () => { syncKdSliderFromInput(); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("Kd_num").addEventListener("blur", () => { const kd_mM = parseKdInput($("Kd_num").value); if (Number.isFinite(kd_mM) && kd_mM > 0) $("Kd_num").value = formatKdWithUnit(kd_mM); saveActiveParamsFromUI(); safeUpdate(false); });
+        
+        $("n").addEventListener("input", () => { $("n_num").value = Number($("n").value).toFixed(4); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("n_num").addEventListener("input", () => { const val = parseFloat($("n_num").value); if(Number.isFinite(val)) { $("n").value = clamp(val, 0.1, 10); saveActiveParamsFromUI(); safeUpdate(false); }});
+
+        $("alpha").addEventListener("input", () => { syncAlphaFromSlider(); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("alpha_num").addEventListener("input", () => { syncAlphaFromNumber(); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("KSV").addEventListener("input", () => { syncKSVFromSlider(); saveActiveParamsFromUI(); safeUpdate(false); });
+        $("KSV_num").addEventListener("input", () => { syncKSVFromNumber(); saveActiveParamsFromUI(); safeUpdate(false); });
+        
+        ["fix_Kd", "fix_n", "fix_alpha", "fix_KSV"].forEach(id => {
+            $(id).addEventListener("change", () => { saveActiveParamsFromUI(); safeUpdate(false); });
+        });
+
+        $("I0").addEventListener("input", () => { safeUpdate(false); });
+        $("weightMode").addEventListener("change", () => { safeUpdate(false); });
+        $("dataFile").addEventListener("change", async (event) => { clearError(); const file = event.target.files && event.target.files[0]; if (file) await handleDataFile(file); });
+
+        function updateAll(labeled = false) {
+            clearError();
+            const baseDataset = readInputs();
+            const numSets = baseDataset.sv_arrays.length;
+            const activeVal = $("activeDatasetIndex").value;
+            const activeIdx = activeVal === "all" ? -1 : parseInt(activeVal);
+
+            const summaries = [];
+            let globalMaxH = 0;
+            let globalResidualRange = 0;
+
+            for(let i=0; i<numSets; i++) {
+                const p = paramsStore[i];
+                if (!p) continue;
+                const singleDataset = { 
+                    h: baseDataset.h, sv: baseDataset.sv_arrays[i], 
+                    I0: baseDataset.I0, Kd: p.Kd, n: p.n, alpha: p.alpha, KSV: p.KSV, 
+                    weightMode: baseDataset.weightMode, included: baseDataset.included_arrays[i]
+                };
+                const sum = computeFitSummary(singleDataset, i);
+                summaries.push(sum);
+                globalMaxH = Math.max(globalMaxH, sum.maxH);
+                globalResidualRange = Math.max(globalResidualRange, sum.residualRange);
+            }
+
+            mainChart.data.datasets = [];
+            resChart.data.datasets = [];
+            resChart.data.datasets.push({ label: "Zero", data: [{ x: 0, y: 0 }, { x: globalMaxH, y: 0 }], type: "line", borderColor: "black", borderWidth: 1.5, borderDash: [6, 4], pointRadius: 0 });
+
+            for(let i=0; i<numSets; i++) {
+                const color = PALETTE[i % PALETTE.length];
+                const condLabel = baseDataset.labels[i];
+                const isActive = (i === activeIdx) || (activeIdx === -1);
+                const fitLineWidth = isActive ? 3 : 1.5;
+
+                mainChart.data.datasets.push({ label: condLabel, data: summaries[i].includedDataPts, backgroundColor: "white", borderColor: color, borderWidth: 2, pointRadius: 5, pointHoverRadius: 6 });
+                if(summaries[i].excludedDataPts.length > 0) {
+                    mainChart.data.datasets.push({ label: `${condLabel} (Exc)`, data: summaries[i].excludedDataPts, backgroundColor: "#d9d9d9", borderColor: color, borderWidth: 1.5, pointRadius: 5, pointStyle: "crossRot", pointHoverRadius: 6 });
+                }
+                
+                const fitLabel = `Fit (${condLabel})`;
+                mainChart.data.datasets.push({ label: fitLabel, data: summaries[i].curve, type: "line", borderColor: color, borderWidth: fitLineWidth, pointRadius: 0, tension: 0 });
+
+                resChart.data.datasets.push({ label: `Res (${condLabel})`, data: summaries[i].includedResPts, backgroundColor: color, pointRadius: 4, pointHoverRadius: 5 });
+                if(summaries[i].excludedResPts.length > 0) {
+                    resChart.data.datasets.push({ label: `Res (${condLabel}) Exc`, data: summaries[i].excludedResPts, backgroundColor: "#888", pointRadius: 4, pointStyle: "crossRot", pointHoverRadius: 5 });
+                }
+            }
+
+            const xPadRight = globalMaxH < 1 ? Math.min(globalMaxH * 0.04, 0.03) : Math.min(globalMaxH * 0.03, 1.0);
+            const xMinPlot = -xPadRight;
+            const xMaxPlot = globalMaxH + xPadRight;
+
+            mainChart.options.scales.x.min = xMinPlot; mainChart.options.scales.x.max = xMaxPlot;
+            resChart.options.scales.x.min = xMinPlot; resChart.options.scales.x.max = xMaxPlot;
+            resChart.options.scales.y.suggestedMin = -1.1 * globalResidualRange; resChart.options.scales.y.suggestedMax = 1.1 * globalResidualRange;
+
+            mainChart.update(); resChart.update();
+            const activeText = activeIdx === -1 ? `All sets | ${isGlobalSharedMode() ? "global shared n/α fit" : numSets + " independent fits"}` : `Active = ${baseDataset.labels[activeIdx]}`;
+            const totalIncluded = summaries.reduce((s, item) => s + item.includedCount, 0);
+            const totalExcluded = summaries.reduce((s, item) => s + item.excludedCount, 0);
+            statusBox.textContent = `${activeText}   |   [I]₀ = ${baseDataset.I0.toFixed(6)} mM   |   included = ${totalIncluded}   |   excluded = ${totalExcluded}`;
+            updateFitReport(baseDataset.labels, paramsStore, lastFitDiagnosticsArray, summaries);
+        }
+
+        function safeUpdate(labeled = false) {
+            try { updateAll(labeled); } catch (err) { showError(err.message); statusBox.textContent = ""; fitReportBox.textContent = "Fit report unavailable until the model evaluates successfully."; }
+        }
+
+        function objective(params, dataset) {
+            const residuals = weightedResidualVector(params, dataset);
+            if (!residuals) return Infinity;
+            return residuals.reduce((sum, r) => sum + r * r, 0);
+        }
+
+        function sanitizeParams(p) { return { Kd: clamp(Number.isFinite(p.Kd) ? p.Kd : 1e-4, 1e-7, 1e2), n: clamp(Number.isFinite(p.n) ? p.n : 1, 0.1, 10), alpha: clamp(Number.isFinite(p.alpha) ? p.alpha : 0, 0, 1), KSV: clamp(Number.isFinite(p.KSV) ? p.KSV : 0.5, 0, 100) }; }
+        function freeParameterKeys(fixed) { return ["Kd", "n", "alpha", "KSV"].filter((key) => !fixed[key]); }
+        function parameterStep(param, value) { const v = Math.max(Math.abs(value), 1e-12); if (param === "Kd") return Math.max(v * 1e-3, 1e-8); if (param === "KSV") return Math.max(v * 1e-3, 1e-5); if (param === "n") return Math.max(v * 1e-3, 1e-4); if (param === "alpha") return Math.max(Math.max(v, 1e-3) * 1e-2, 1e-5); return 1e-4; }
+        function parameterBounds(param) { if (param === "Kd") return [1e-7, 1e2]; if (param === "n") return [0.1, 10]; if (param === "alpha") return [0, 1]; if (param === "KSV") return [0, 100]; return [-Infinity, Infinity]; }
+
+        function numericJacobian(params, dataset, keys) {
+            const baseResiduals = weightedResidualVector(params, dataset);
+            if (!baseResiduals) return null;
+            const m = baseResiduals.length, p = keys.length;
+            const J = Array.from({ length: m }, () => Array(p).fill(0));
+            for (let col = 0; col < p; col++) {
+                const key = keys[col], step = parameterStep(key, params[key]), [lo, hi] = parameterBounds(key);
+                const plus = sanitizeParams({ ...params, [key]: Math.min(params[key] + step, hi) }), minus = sanitizeParams({ ...params, [key]: Math.max(params[key] - step, lo) });
+                const rPlus = weightedResidualVector(plus, dataset), rMinus = weightedResidualVector(minus, dataset);
+                if (!rPlus || !rMinus) return null;
+                const denom = (plus[key] - minus[key]) || (2 * step);
+                for (let row = 0; row < m; row++) J[row][col] = (rPlus[row] - rMinus[row]) / denom;
+            }
+            return { J, residuals: baseResiduals };
+        }
+
+        function transpose(A) { return A[0].map((_, i) => A.map(row => row[i])); }
+        function matMul(A, B) { const rows = A.length, cols = B[0].length, inner = B.length, out = Array.from({ length: rows }, () => Array(cols).fill(0)); for (let i = 0; i < rows; i++) { for (let k = 0; k < inner; k++) { const aik = A[i][k]; for (let j = 0; j < cols; j++) out[i][j] += aik * B[k][j]; } } return out; }
+        function matVecMul(A, x) { return A.map(row => row.reduce((sum, v, i) => sum + v * x[i], 0)); }
+        function invertMatrix(A) {
+            const n = A.length; if (!n) return []; const M = A.map((row, i) => row.concat(Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))));
+            for (let col = 0; col < n; col++) {
+                let pivotRow = col, best = Math.abs(M[col][col]);
+                for (let r = col + 1; r < n; r++) { const val = Math.abs(M[r][col]); if (val > best) { best = val; pivotRow = r; } }
+                if (best < 1e-14) return null;
+                if (pivotRow !== col) [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
+                const pivot = M[col][col]; for (let j = 0; j < 2 * n; j++) M[col][j] /= pivot;
+                for (let r = 0; r < n; r++) { if (r === col) continue; const factor = M[r][col]; for (let j = 0; j < 2 * n; j++) M[r][j] -= factor * M[col][j]; }
+            }
+            return M.map(row => row.slice(n));
+        }
+
+        function solveLinearSystem(A, b) { const inv = invertMatrix(A); if (!inv) return null; return matVecMul(inv, b); }
+        function jtJandJtr(J, residuals) { const JT = transpose(J), JTJ = matMul(JT, J), JTr = JT.map(row => row.reduce((sum, v, i) => sum + v * residuals[i], 0)); return { JTJ, JTr }; }
+        function countFreeParams(fixed) { return [!fixed.Kd, !fixed.n, !fixed.alpha, !fixed.KSV].filter(Boolean).length; }
+        function approxConditionNumber(covariance) {
+            if (!Array.isArray(covariance) || !covariance.length) return NaN;
+            const diag = covariance.map((row, i) => Math.abs(row[i] || 0)).filter(v => v > 0);
+            if (!diag.length) return NaN;
+            return Math.max(...diag) / Math.max(Math.min(...diag), 1e-18);
+        }
+        function buildWarnings(params, summary, diagnostics, fixed) {
+            const warnings = [];
+            const nFree = countFreeParams(fixed);
+            if (summary.includedCount <= nFree + 1) warnings.push('Very few included points relative to the number of free parameters.');
+            if (summary.clippedDiscCount > 0) warnings.push(`Quadratic discriminant was clipped for ${summary.clippedDiscCount} point(s).`);
+            if (Number.isFinite(summary.minDenominator) && summary.minDenominator < 1e-4) warnings.push('Model denominator approaches zero for at least one point.');
+            if (nFree > 0 && diagnostics && !diagnostics.covariance) warnings.push('Uncertainty matrix could not be estimated reliably.');
+            const bounds = { Kd:[1e-7,1e2], n:[0.1,10], alpha:[0,1], KSV:[0,100] };
+            ['Kd','n','alpha','KSV'].forEach((key) => {
+                const [lo, hi] = bounds[key];
+                const value = params[key];
+                const nearLower = Math.abs(value - lo) <= Math.max(Math.abs(lo)*0.05, 1e-8);
+                const nearUpper = Math.abs(value - hi) <= Math.max(Math.abs(hi)*0.05, 1e-6);
+                if (nearLower || nearUpper) warnings.push(`${key} is close to a fitting bound.`);
+            });
+            const se = diagnostics && diagnostics.standardErrors ? diagnostics.standardErrors : {};
+            ['Kd','n','alpha','KSV'].forEach((key) => {
+                if (fixed[key]) return;
+                const err = se[key], value = Math.abs(params[key]);
+                if (Number.isFinite(err) && err > Math.max(value, 1e-12)) warnings.push(`${key} uncertainty is large relative to the estimate.`);
+            });
+            const cond = approxConditionNumber(diagnostics ? diagnostics.covariance : null);
+            if (Number.isFinite(cond) && cond > 1e6) warnings.push('Covariance matrix is ill-conditioned; parameters may be weakly identifiable.');
+            return Array.from(new Set(warnings));
+        }
+
+        function seededGridSearch(dataset, fixed, initial) {
+            let bestParams = sanitizeParams(initial), bestScore = objective(bestParams, dataset);
+            const kdGrid = fixed.Kd ? [bestParams.Kd] : [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2].map(v => Math.pow(10, v));
+            const ksvGrid = fixed.KSV ? [bestParams.KSV] : [1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1, 3, 10, 30, 100];
+            for (const kd of kdGrid) {
+                for (const ksv of ksvGrid) {
+                    const candidate = sanitizeParams({ ...bestParams, Kd: kd, KSV: ksv }); const score = objective(candidate, dataset);
+                    if (score < bestScore) { bestScore = score; bestParams = candidate; }
+                }
+            }
+            return { params: bestParams, weightedSSE: bestScore, tested: kdGrid.length * ksvGrid.length };
+        }
+
+        function estimateStandardErrors(params, dataset, fixed) {
+            const keys = freeParameterKeys(fixed);
+            if (!keys.length) return { errors: {}, covariance: [], dof: activeIndices(dataset).length, sigma2: 0 };
+            const jac = numericJacobian(params, dataset, keys); if (!jac) return null;
+            const { JTJ } = jtJandJtr(jac.J, jac.residuals), invJTJ = invertMatrix(JTJ); if (!invJTJ) return null;
+            const dof = Math.max(activeIndices(dataset).length - keys.length, 1), sse = objective(params, dataset), sigma2 = sse / dof;
+            const covariance = invJTJ.map(row => row.map(v => v * sigma2)), errors = {};
+            keys.forEach((key, i) => { errors[key] = Math.sqrt(Math.max(covariance[i][i], 0)); });
+            return { errors, covariance, dof, sigma2 };
+        }
+
+        function levenbergMarquardtFit(seedParams, dataset, fixed) {
+            const keys = freeParameterKeys(fixed); let params = sanitizeParams(seedParams), lambda = 1e-2, bestScore = objective(params, dataset);
+            if (!keys.length) return { params, weightedSSE: bestScore, iterations: 0, converged: true };
+            let converged = false, iterations = 0;
+            for (let iter = 0; iter < 120; iter++) {
+                iterations = iter + 1; const jac = numericJacobian(params, dataset, keys); if (!jac) break;
+                const { JTJ, JTr } = jtJandJtr(jac.J, jac.residuals);
+                const A = JTJ.map((row, i) => row.map((v, j) => v + (i === j ? lambda * (Math.abs(JTJ[i][i]) + 1e-12) : 0)));
+                const step = solveLinearSystem(A, JTr.map(v => -v)); if (!step) break;
+                const candidate = sanitizeParams({ ...params }); for (let i = 0; i < keys.length; i++) candidate[keys[i]] = candidate[keys[i]] + step[i];
+                const sanitizedCandidate = sanitizeParams(candidate), trialScore = objective(sanitizedCandidate, dataset);
+                if (Number.isFinite(trialScore) && trialScore < bestScore) {
+                    params = sanitizedCandidate;
+                    if (Math.abs(bestScore - trialScore) < 1e-12 * Math.max(1, bestScore)) { bestScore = trialScore; converged = true; break; }
+                    bestScore = trialScore; lambda = Math.max(lambda / 3, 1e-7);
+                    if (Math.max(...step.map(Math.abs)) < 1e-9) { converged = true; break; }
+                } else lambda = Math.min(lambda * 5, 1e12);
+            }
+            return { params, weightedSSE: bestScore, iterations, converged };
+        }
+
+        function residualKeysFromFixed(fixed) {
+            return ["n", "alpha"].filter((key) => !fixed[key]);
+        }
+
+        function numericJacobianSharedNA(sharedParams, baseDataset, fixed) {
+            const keys = residualKeysFromFixed(fixed);
+            const baseResiduals = weightedResidualVectorSharedNA(sharedParams, baseDataset);
+            if (!baseResiduals) return null;
+            const m = baseResiduals.length, p = keys.length;
+            const J = Array.from({ length: m }, () => Array(p).fill(0));
+            for (let col = 0; col < p; col++) {
+                const key = keys[col], step = parameterStep(key, sharedParams[key]), [lo, hi] = parameterBounds(key);
+                const plus = { ...sharedParams, [key]: Math.min(sharedParams[key] + step, hi) };
+                const minus = { ...sharedParams, [key]: Math.max(sharedParams[key] - step, lo) };
+                const rPlus = weightedResidualVectorSharedNA(plus, baseDataset), rMinus = weightedResidualVectorSharedNA(minus, baseDataset);
+                if (!rPlus || !rMinus) return null;
+                const denom = (plus[key] - minus[key]) || (2 * step);
+                for (let row = 0; row < m; row++) J[row][col] = (rPlus[row] - rMinus[row]) / denom;
+            }
+            return { J, residuals: baseResiduals, keys };
+        }
+
+        function estimateStandardErrorsSharedNA(sharedParams, baseDataset, fixed) {
+            const keys = residualKeysFromFixed(fixed);
+            if (!keys.length) return { errors: {}, covariance: [], dof: weightedResidualVectorSharedNA(sharedParams, baseDataset).length, sigma2: 0 };
+            const jac = numericJacobianSharedNA(sharedParams, baseDataset, fixed);
+            if (!jac) return null;
+            const { JTJ } = jtJandJtr(jac.J, jac.residuals), invJTJ = invertMatrix(JTJ);
+            if (!invJTJ) return null;
+            const dof = Math.max(jac.residuals.length - keys.length, 1);
+            const sse = jac.residuals.reduce((sum, r) => sum + r * r, 0);
+            const sigma2 = sse / dof;
+            const covariance = invJTJ.map(row => row.map(v => v * sigma2));
+            const errors = {};
+            keys.forEach((key, i) => { errors[key] = Math.sqrt(Math.max(covariance[i][i], 0)); });
+            return { errors, covariance, dof, sigma2 };
+        }
+
+        function levenbergMarquardtSharedNA(initialShared, baseDataset, fixed) {
+            const keys = residualKeysFromFixed(fixed);
+            let params = { n: clamp(Number.isFinite(initialShared.n) ? initialShared.n : 1.0, 0.1, 10), alpha: clamp(Number.isFinite(initialShared.alpha) ? initialShared.alpha : 0.0, 0, 1) };
+            let lambda = 1e-2;
+            const baseResiduals = weightedResidualVectorSharedNA(params, baseDataset);
+            let bestScore = baseResiduals ? baseResiduals.reduce((sum, r) => sum + r * r, 0) : Infinity;
+            if (!keys.length) return { params, weightedSSE: bestScore, iterations: 0, converged: true };
+            let converged = false, iterations = 0;
+            for (let iter = 0; iter < 120; iter++) {
+                iterations = iter + 1;
+                const jac = numericJacobianSharedNA(params, baseDataset, fixed);
+                if (!jac) break;
+                const { JTJ, JTr } = jtJandJtr(jac.J, jac.residuals);
+                const A = JTJ.map((row, i) => row.map((v, j) => v + (i === j ? lambda * (Math.abs(JTJ[i][i]) + 1e-12) : 0)));
+                const step = solveLinearSystem(A, JTr.map(v => -v));
+                if (!step) break;
+                const candidate = { ...params };
+                for (let i = 0; i < keys.length; i++) candidate[keys[i]] = candidate[keys[i]] + step[i];
+                candidate.n = clamp(candidate.n, 0.1, 10);
+                candidate.alpha = clamp(candidate.alpha, 0, 1);
+                const trialResiduals = weightedResidualVectorSharedNA(candidate, baseDataset);
+                const trialScore = trialResiduals ? trialResiduals.reduce((sum, r) => sum + r * r, 0) : Infinity;
+                if (Number.isFinite(trialScore) && trialScore < bestScore) {
+                    params = candidate;
+                    if (Math.abs(bestScore - trialScore) < 1e-12 * Math.max(1, bestScore)) { bestScore = trialScore; converged = true; break; }
+                    bestScore = trialScore; lambda = Math.max(lambda / 3, 1e-7);
+                    if (Math.max(...step.map(Math.abs)) < 1e-9) { converged = true; break; }
+                } else {
+                    lambda = Math.min(lambda * 5, 1e12);
+                }
+            }
+            return { params, weightedSSE: bestScore, iterations, converged };
+        }
+
+        function updateFitReport(labels, paramsList, diagnosticsArray, summaries) {
+            const lines = [];
+            if (isGlobalSharedMode()) {
+                const diag0 = diagnosticsArray && diagnosticsArray[0] ? diagnosticsArray[0] : null;
+                const summaryTotals = summaries.reduce((acc, s) => {
+                    acc.included += s.includedCount;
+                    acc.excluded += s.excludedCount;
+                    acc.weightedSSE += Number.isFinite(s.weightedSSE) ? s.weightedSSE : 0;
+                    return acc;
+                }, {included:0, excluded:0, weightedSSE:0});
+                lines.push("GLOBAL SHARED n/α FIT");
+                lines.push(`All Sets mode: ${globalModeLabel()}`);
+                lines.push(diag0 && diag0.seed ? `Shared-mode optimization: ${diag0.seed.tested} Kd/KSV combinations tested.` : `Shared-mode optimization: not run.`);
+                lines.push(diag0 ? `Optimizer: Levenberg–Marquardt${diag0.converged ? " (converged)" : " (stopped)"}, iterations = ${diag0.iterations ?? 0}` : `Optimizer: n/a`);
+                lines.push(`Total included = ${summaryTotals.included} | Total excluded = ${summaryTotals.excluded} | Weighted SSE = ${Number.isFinite(summaryTotals.weightedSSE) ? summaryTotals.weightedSSE.toPrecision(5) : "n/a"}`);
+                lines.push("");
+            }
+            for(let i=0; i<paramsList.length; i++) {
+                const params = paramsList[i];
+                const summary = summaries[i];
+                const diag = diagnosticsArray && diagnosticsArray[i] ? diagnosticsArray[i] : null;
+                const se = diag && diag.standardErrors ? diag.standardErrors : {};
+                const fixed = { Kd: params.fix_Kd, n: params.fix_n, alpha: params.fix_alpha, KSV: params.fix_KSV };
+                
+                lines.push(`--- ${labels[i].toUpperCase()} ---`);
+                lines.push(`Kd = ${formatKdWithSigFigs(params.Kd, fixed.Kd ? 0 : se.Kd)}${fixed.Kd ? " (fixed)" : ""}`);
+                lines.push(`n = ${formatNormalWithSigFigs(params.n, fixed.n ? 0 : se.n)}${fixed.n ? " (fixed)" : ""}`);
+                lines.push(`α = ${formatNormalWithSigFigs(params.alpha, fixed.alpha ? 0 : se.alpha)}${fixed.alpha ? " (fixed)" : ""}`);
+                lines.push(`kq·τ0 = ${formatNormalWithSigFigs(params.KSV, fixed.KSV ? 0 : se.KSV)} mM⁻¹${fixed.KSV ? " (fixed)" : ""}`);
+                lines.push(`RMSE = ${Number.isFinite(summary.rmse) ? summary.rmse.toPrecision(3) : "n/a"} | R² = ${Number.isFinite(summary.r2) ? summary.r2.toFixed(3) : "n/a"} | Included = ${summary.includedCount} / Excluded = ${summary.excludedCount}`);
+                lines.push("");
+            }
+            fitReportBox.textContent = lines.join("\n");
+        }
+
+
+        function fitGlobalShared() {
+            const baseDataset = readInputs();
+            if (!paramsStore.length) return;
+
+            const uiFixed = { Kd: $("fix_Kd").checked, n: $("fix_n").checked, alpha: $("fix_alpha").checked, KSV: $("fix_KSV").checked };
+            let shared = {
+                n: clamp(Number.isFinite(paramsStore[0].n) ? paramsStore[0].n : 1.0, 0.1, 10),
+                alpha: clamp(Number.isFinite(paramsStore[0].alpha) ? paramsStore[0].alpha : 0.0, 0, 1)
+            };
+
+            let globalIterations = 0;
+            let globalConverged = false;
+            const diagArray = Array(baseDataset.sv_arrays.length).fill(null);
+
+            for (let cycle = 0; cycle < 6; cycle++) {
+                let totalChange = 0;
+
+                for (let i = 0; i < paramsStore.length; i++) {
+                    const dataset = buildSingleDataset(baseDataset, i, shared);
+                    const fixedLocal = { Kd: uiFixed.Kd, n: true, alpha: true, KSV: uiFixed.KSV };
+                    const initialLocal = sanitizeParams({ ...paramsStore[i], n: shared.n, alpha: shared.alpha });
+                    const seed = seededGridSearch(dataset, fixedLocal, initialLocal);
+                    const lm = levenbergMarquardtFit(seed.params, dataset, fixedLocal);
+                    paramsStore[i].Kd = lm.params.Kd;
+                    paramsStore[i].KSV = lm.params.KSV;
+                    paramsStore[i].n = shared.n;
+                    paramsStore[i].alpha = shared.alpha;
+                    paramsStore[i].fix_Kd = uiFixed.Kd;
+                    paramsStore[i].fix_n = uiFixed.n;
+                    paramsStore[i].fix_alpha = uiFixed.alpha;
+                    paramsStore[i].fix_KSV = uiFixed.KSV;
+                    diagArray[i] = { seed, iterations: lm.iterations, converged: lm.converged, weightedSSE: lm.weightedSSE, mode: "global_shared_n_alpha_n_alpha" };
+                }
+
+                const sharedFit = levenbergMarquardtSharedNA(shared, baseDataset, { n: uiFixed.n, alpha: uiFixed.alpha });
+                globalIterations += sharedFit.iterations || 0;
+                totalChange = Math.max(Math.abs(shared.n - sharedFit.params.n), Math.abs(shared.alpha - sharedFit.params.alpha));
+                shared = sharedFit.params;
+                for (let i = 0; i < paramsStore.length; i++) {
+                    paramsStore[i].n = shared.n;
+                    paramsStore[i].alpha = shared.alpha;
+                }
+                if ((sharedFit.converged && totalChange < 1e-8) || totalChange < 1e-8) {
+                    globalConverged = true;
+                    break;
+                }
+            }
+
+            const sharedSE = estimateStandardErrorsSharedNA(shared, baseDataset, { n: uiFixed.n, alpha: uiFixed.alpha });
+            for (let i = 0; i < paramsStore.length; i++) {
+                const dataset = buildSingleDataset(baseDataset, i, shared);
+                const fixedLocal = { Kd: uiFixed.Kd, n: true, alpha: true, KSV: uiFixed.KSV };
+                const seLocal = estimateStandardErrors({ Kd: paramsStore[i].Kd, n: shared.n, alpha: shared.alpha, KSV: paramsStore[i].KSV }, dataset, fixedLocal);
+                diagArray[i] = {
+                    ...(diagArray[i] || {}),
+                    iterations: globalIterations + (diagArray[i] && diagArray[i].iterations ? diagArray[i].iterations : 0),
+                    converged: globalConverged && !!(diagArray[i] && diagArray[i].converged),
+                    standardErrors: {
+                        Kd: seLocal && seLocal.errors ? (seLocal.errors.Kd || 0) : 0,
+                        n: sharedSE && sharedSE.errors ? (sharedSE.errors.n || 0) : 0,
+                        alpha: sharedSE && sharedSE.errors ? (sharedSE.errors.alpha || 0) : 0,
+                        KSV: seLocal && seLocal.errors ? (seLocal.errors.KSV || 0) : 0
+                    },
+                    covariance: sharedSE ? sharedSE.covariance : null,
+                    dof: sharedSE ? sharedSE.dof : null,
+                    sigma2: sharedSE ? sharedSE.sigma2 : null,
+                    mode: "global_shared_n_alpha_n_alpha"
+                };
+            }
+            lastFitDiagnosticsArray = diagArray;
+        }
+
+        function fitDataset(idx) {
+            const baseDataset = readInputs();
+            if (!paramsStore[idx]) return;
+            const singleDataset = { 
+                h: baseDataset.h, sv: baseDataset.sv_arrays[idx], 
+                I0: baseDataset.I0, Kd: paramsStore[idx].Kd, n: paramsStore[idx].n, alpha: paramsStore[idx].alpha, KSV: paramsStore[idx].KSV, 
+                weightMode: baseDataset.weightMode, included: baseDataset.included_arrays[idx]
+            };
+            const fixed = { Kd: paramsStore[idx].fix_Kd, n: paramsStore[idx].fix_n, alpha: paramsStore[idx].fix_alpha, KSV: paramsStore[idx].fix_KSV };
+            
+            const initial = sanitizeParams(paramsStore[idx]);
+            const seed = seededGridSearch(singleDataset, fixed, initial);
+            const lm = levenbergMarquardtFit(seed.params, singleDataset, fixed);
+            const standardErrors = estimateStandardErrors(lm.params, singleDataset, fixed);
+
+            if (!lastFitDiagnosticsArray) lastFitDiagnosticsArray = Array(baseDataset.sv_arrays.length).fill(null);
+            lastFitDiagnosticsArray[idx] = {
+                seed, iterations: lm.iterations, converged: lm.converged, weightedSSE: lm.weightedSSE,
+                standardErrors: standardErrors ? standardErrors.errors : {}, covariance: standardErrors ? standardErrors.covariance : null, dof: standardErrors ? standardErrors.dof : null, sigma2: standardErrors ? standardErrors.sigma2 : null
+            };
+            
+            paramsStore[idx].Kd = lm.params.Kd;
+            paramsStore[idx].n = lm.params.n;
+            paramsStore[idx].alpha = lm.params.alpha;
+            paramsStore[idx].KSV = lm.params.KSV;
+        }
+
+        $("autoFitBtn").addEventListener("click", () => {
+            const val = $("activeDatasetIndex").value;
+            const btn = $("autoFitBtn"); 
+            btn.disabled = true; 
+            btn.textContent = val === "all" ? (isGlobalSharedMode() ? "Global Fitting..." : "Fitting All...") : "Fitting Active...";
+            
+            setTimeout(() => {
+                try { 
+                    if (val === "all") {
+                        if (isGlobalSharedMode()) fitGlobalShared();
+                        else for(let i=0; i<paramsStore.length; i++) fitDataset(i);
+                    } else {
+                        fitDataset(parseInt(val));
+                    }
+                    loadActiveParamsToUI();
+                    safeUpdate(false); 
+                } catch (err) { 
+                    showError(err.message); 
+                } finally { 
+                    btn.disabled = false; 
+                    btn.textContent = val === "all" ? (isGlobalSharedMode() ? "Snap to Global Fit" : "Snap to Fit All") : "Snap to Fit Active"; 
+                }
+            }, 10);
+        });
+
+        $("resultBtn").addEventListener("click", () => safeUpdate(true));
+
+        $("clearExcludedBtn").addEventListener("click", () => { excludedIndices.clear(); safeUpdate(false); });
+
+        $("residualChart").addEventListener("click", (event) => {
+            const hits = resChart.getElementsAtEventForMode(event, "nearest", { intersect: true }, true);
+            if (!hits || !hits.length) return;
+            const hit = hits[0];
+            const datasetIndex = resChart.data.datasets[hit.datasetIndex].data[hit.index].datasetIndex;
+            const pointIndex = resChart.data.datasets[hit.datasetIndex].data[hit.index].pointIndex;
+            
+            if(datasetIndex === undefined || pointIndex === undefined) return;
+            
+            const key = `${datasetIndex},${pointIndex}`;
+            if (excludedIndices.has(key)) excludedIndices.delete(key);
+            else excludedIndices.add(key);
+            safeUpdate(false);
+        });
+
+        $("journalTheme").addEventListener("change", () => { applyJournalTheme($("journalTheme").value); safeUpdate(false); });
+
+        $("csvBtn").addEventListener("click", () => {
+            try {
+                const baseDataset = readInputs();
+                let csv = "H0_mM";
+                for(let i=0; i<baseDataset.sv_arrays.length; i++) csv += `,SV_obs_${baseDataset.labels[i]},SV_fit_${baseDataset.labels[i]}`;
+                csv += "\n";
+                
+                for(let j=0; j<baseDataset.h.length; j++) {
+                    let row = [baseDataset.h[j]];
+                    for(let i=0; i<baseDataset.sv_arrays.length; i++) {
+                        const p = paramsStore[i];
+                        row.push(baseDataset.sv_arrays[i][j]);
+                        row.push(calculateSV(baseDataset.h[j], baseDataset.I0, p.Kd, p.n, p.alpha, p.KSV));
+                    }
+                    csv += row.join(",") + "\n";
+                }
+                triggerBlobDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "stern_volmer_multifit_export.csv");
+            } catch (err) { showError(err.message || "Could not export CSV."); }
+        });
+
+        // --- NEW Fit Parameters CSV Export ---
+        
+        $("fitCsvBtn").addEventListener("click", () => {
+            try {
+                const baseDataset = readInputs();
+                const numSets = baseDataset.sv_arrays.length;
+                const rows = [];
+                rows.push([
+                    "condition",
+                    "data_H0_mM",
+                    "data_F0_over_F_obs",
+                    "data_F0_over_F_fit",
+                    "residual_F0_over_F",
+                    "included_in_fit",
+                    "curve_H0_mM",
+                    "curve_F0_over_F_fit"
+                ].join(","));
+
+                for (let i = 0; i < numSets; i++) {
+                    const p = paramsStore[i];
+                    if (!p) continue;
+
+                    const singleDataset = {
+                        h: baseDataset.h,
+                        sv: baseDataset.sv_arrays[i],
+                        I0: baseDataset.I0,
+                        Kd: p.Kd,
+                        n: p.n,
+                        alpha: p.alpha,
+                        KSV: p.KSV,
+                        weightMode: baseDataset.weightMode,
+                        included: baseDataset.included_arrays[i]
+                    };
+                    const summary = computeFitSummary(singleDataset, i);
+                    const condition = String(baseDataset.labels[i] || `Condition ${i+1}`).replace(/"/g, '""');
+
+                    const nData = baseDataset.h.length;
+                    const nCurve = summary.curve.length;
+                    const nRows = Math.max(nData, nCurve);
+
+                    for (let r = 0; r < nRows; r++) {
+                        const dataH = r < nData ? baseDataset.h[r] : "";
+                        const dataObs = r < nData ? baseDataset.sv_arrays[i][r] : "";
+                        const dataFit = r < nData ? summary.preds[r] : "";
+                        const residual = (r < nData && Number.isFinite(summary.preds[r])) ? (baseDataset.sv_arrays[i][r] - summary.preds[r]) : "";
+                        const included = r < nData ? (baseDataset.included_arrays[i][r] ? "yes" : "no") : "";
+                        const curveH = r < nCurve ? summary.curve[r].x : "";
+                        const curveFit = r < nCurve ? summary.curve[r].y : "";
+
+                        rows.push([
+                            `"${condition}"`,
+                            dataH,
+                            dataObs,
+                            dataFit,
+                            residual,
+                            included,
+                            curveH,
+                            curveFit
+                        ].join(","));
+                    }
+                }
+
+                triggerBlobDownload(
+                    new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8" }),
+                    "stern_volmer_fit_export.csv"
+                );
+            } catch (err) {
+                showError(err.message || "Could not export Fit CSV.");
+            }
+        });
+
+        function niceTicks(min, max, count = 5) {
+            if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return [min || 0];
+            const span = max - min; const rawStep = span / Math.max(1, count); const mag = Math.pow(10, Math.floor(Math.log10(Math.abs(rawStep))));
+            const norm = rawStep / mag; let niceNorm; if (norm <= 1) niceNorm = 1; else if (norm <= 2) niceNorm = 2; else if (norm <= 5) niceNorm = 5; else niceNorm = 10;
+            const step = niceNorm * mag, start = Math.ceil(min / step) * step, ticks = [];
+            for (let v = start; v <= max + step * 0.5; v += step) ticks.push(Number(v.toFixed(10)));
+            if (!ticks.includes(0) && min < 0 && max > 0) ticks.push(0); return Array.from(new Set(ticks)).sort((a, b) => a - b);
+        }
+
+        function formatTickLabel(value) {
+            if (!Number.isFinite(value)) return ""; if (Math.abs(value) < 1e-12) return "0"; const abs = Math.abs(value);
+            if (abs >= 100) return String(Math.round(value)); if (abs >= 10) return Number(value).toFixed(0);
+            if (abs >= 1) return Number(value).toFixed(1).replace(/\.0$/, "");
+            if (abs >= 0.1) return Number(value).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+            return Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+        }
+
+        function applyDynamicExportPreset() {
+            const statsPlacement = $("statsPlacement") ? $("statsPlacement").value : "off";
+            const residualPlacement = $("residualPlacement") ? $("residualPlacement").value : "bottom";
+            const logX = !!($("exportLogX") && $("exportLogX").checked);
+            const w = $("expWmm"), h = $("expHmm"), dpi = $("expDpi"), line = $("lineScale"), font = $("fontScale");
+            if (!w || !h || !dpi || !line || !font) return;
+            w.value = "80"; dpi.value = "600";
+            if (residualPlacement === "off" && statsPlacement === "off") { h.value = logX ? "56" : "58"; line.value = "1.0"; font.value = "1.0"; }
+            else if (residualPlacement === "off" && statsPlacement === "top") { h.value = logX ? "64" : "66"; line.value = "1.0"; font.value = "0.95"; }
+            else if (residualPlacement === "bottom" && statsPlacement === "off") { h.value = logX ? "72" : "74"; line.value = "1.0"; font.value = "0.95"; }
+            else { h.value = logX ? "84" : "88"; line.value = "1.0"; font.value = "0.95"; }
+        }
+
+        function buildSVGString() {
+            const baseDataset = readInputs();
+            const numSets = baseDataset.sv_arrays.length;
+            
+            const summaries = [];
+            for(let i=0; i<numSets; i++) {
+                const singleDataset = { h: baseDataset.h, sv: baseDataset.sv_arrays[i], I0: baseDataset.I0, Kd: paramsStore[i].Kd, n: paramsStore[i].n, alpha: paramsStore[i].alpha, KSV: paramsStore[i].KSV, weightMode: baseDataset.weightMode, included: baseDataset.included_arrays[i] };
+                summaries.push(computeFitSummary(singleDataset, i));
+            }
+
+            const widthMm = Math.max(75, parseFloat($("expWmm").value) || 80), heightMm = Math.max(70, parseFloat($("expHmm").value) || 88);
+            const lineScale = Math.max(0.7, parseFloat($("lineScale").value) || 1.0), fontScale = Math.max(0.7, parseFloat($("fontScale").value) || 1.0);
+            const exportLogX = !!($("exportLogX") && $("exportLogX").checked), residualVisible = $("residualPlacement") ? $("residualPlacement").value === "bottom" : true;
+            const statsPlacement = $("statsPlacement") ? $("statsPlacement").value : "off";
+            const statsVisible = statsPlacement !== "off";
+
+            const width = Math.round(widthMm * 10), height = Math.round(heightMm * 10);
+            
+            const statsRows = [];
+            statsRows.push(["Condition", "Kd", "n", "α", "kq·τ0", "R²", "RMSE", "In/Ex"]);
+            for(let i=0; i<numSets; i++) {
+                const diag = lastFitDiagnosticsArray && lastFitDiagnosticsArray[i] ? lastFitDiagnosticsArray[i] : null;
+                const se = diag && diag.standardErrors ? diag.standardErrors : {};
+                const p = paramsStore[i];
+                
+                statsRows.push([
+                    baseDataset.labels[i],
+                    formatKdWithSigFigs(p.Kd, p.fix_Kd ? 0 : se.Kd),
+                    formatNormalWithSigFigs(p.n, p.fix_n ? 0 : se.n),
+                    formatNormalWithSigFigs(p.alpha, p.fix_alpha ? 0 : se.alpha),
+                    formatNormalWithSigFigs(p.KSV, p.fix_KSV ? 0 : se.KSV),
+                    Number.isFinite(summaries[i].r2) ? summaries[i].r2.toFixed(3) : "n/a",
+                    Number.isFinite(summaries[i].rmse) ? summaries[i].rmse.toExponential(2) : "n/a",
+                    `${summaries[i].includedCount}/${summaries[i].excludedCount}`
+                ]);
+            }
+
+            const statsSize = Math.max(8.5, Math.round(8.5 * fontScale));
+            const rowH = Math.round(14 * fontScale);
+            const statsH = statsVisible ? (statsRows.length * rowH + 20) : 0;
+
+            const topStatsH = statsPlacement === "top" ? statsH : 0;
+            const topBottomOuterPad = Math.round(height * 0.018), interPanelGap = residualVisible ? Math.round(height * 0.038) : 0;
+            const statsGapTop = statsPlacement === "top" ? Math.round(height * 0.018) : 0;
+
+            const plotAreaH = height - topStatsH - interPanelGap - statsGapTop - 2 * topBottomOuterPad;
+            const mainH = residualVisible ? Math.round(plotAreaH * 0.895) : plotAreaH, residualH = residualVisible ? (plotAreaH - mainH) : 0;
+
+            const left = Math.round(width * 0.12), right = Math.round(width * 0.02);
+            const topPad = Math.round(mainH * 0.065), bottomPadMain = residualVisible ? Math.round(mainH * 0.12) : Math.round(mainH * 0.10);
+            const topPadRes = residualVisible ? Math.round(residualH * 0.18) : 0, bottomPadRes = residualVisible ? Math.round(residualH * 0.28) : 0;
+            const plotW = width - left - right, mainPlotH = mainH - topPad - bottomPadMain, resPlotH = residualVisible ? (residualH - topPadRes - bottomPadRes) : 0;
+            
+            const mainY0 = topBottomOuterPad + topStatsH + statsGapTop;
+            const resY0 = mainY0 + mainH + interPanelGap;
+
+            const globalMaxH = Math.max(...summaries.map(s => s.maxH));
+            const xPadRight = globalMaxH < 1 ? Math.min(globalMaxH * 0.04, 0.03) : Math.min(globalMaxH * 0.03, 1.0);
+            const xMinLinear = -xPadRight, xMaxLinear = globalMaxH + xPadRight;
+
+            const yMainMax = Math.max(...summaries.flatMap(s => s.includedDataPts.map(p=>p.y).concat(s.curve.map(p=>p.y))));
+            const y1Min = 0, y1Max = yMainMax + Math.max((yMainMax || 1) * 0.06, 0.05);
+            
+            const globalResRange = Math.max(...summaries.map(s => s.residualRange));
+            const y2Min = -1.1 * globalResRange, y2Max = 1.1 * globalResRange;
+
+            const xMap = (x) => left + ((x - xMinLinear) / (xMaxLinear - xMinLinear || 1)) * plotW;
+            const yMapMain = (y) => mainY0 + topPad + mainPlotH - ((y - y1Min) / (y1Max - y1Min || 1)) * mainPlotH;
+            const yMapRes = (y) => resY0 + topPadRes + resPlotH - ((y - y2Min) / (y2Max - y2Min || 1)) * resPlotH;
+
+            const axisSW = (1.0 * lineScale).toFixed(2), fitSW = (1.5 * lineScale).toFixed(2), pointR = (2.5 * lineScale).toFixed(2), residualPointR = (1.8 * lineScale).toFixed(2);
+            const tickSW = (0.9 * lineScale).toFixed(2), tickLen = Math.max(5, Math.round(5 * lineScale)), tickSize = Math.max(11, Math.round(11 * fontScale)), labelSize = Math.max(13, Math.round(13 * fontScale));
+
+            const xTicks = niceTicks(xMinLinear, xMaxLinear, 10).map(v => ({ value: v, label: formatTickLabel(v) }));
+            const yMainTicks = niceTicks(y1Min, y1Max, 8), yResTicks = niceTicks(y2Min, y2Max, 5);
+
+            function textSvg(x, y, text, size, weight = "normal", anchor = "start") { return `<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" fill="black">${escapeXml(text)}</text>`; }
+            function lineSvg(x1, y1, x2, y2, stroke = "black", sw = 1, dash = "") { return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${sw}" ${dash ? `stroke-dasharray="${dash}"` : ""}/>`; }
+            function circleSvg(cx, cy, r, stroke = "black", sw = 1) { return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="white" stroke="${stroke}" stroke-width="${sw}"/>`; }
+
+            function drawStatsTable(svgParts, yStart) {
+                if (!statsVisible) return;
+                const tableX = left;
+                const tableY = yStart + Math.round(8 * fontScale);
+                const tableW = plotW;
+                
+                const colWeights = [0.14, 0.18, 0.13, 0.13, 0.15, 0.10, 0.10, 0.07];
+                
+                svgParts.push(`<rect x="${tableX}" y="${tableY}" width="${tableW}" height="${rowH * statsRows.length + 10}" fill="white" stroke="black" stroke-width="${Math.max(0.8, Number(axisSW) * 0.9)}"/>`);
+                for (let i = 0; i < statsRows.length; i++) {
+                    const y = tableY + 16 + i * rowH;
+                    if (i > 0) svgParts.push(lineSvg(tableX, y - 10, tableX + tableW, y - 10, "#d8d8d8", 0.6));
+                    
+                    let currentX = tableX + 4;
+                    for(let j=0; j < statsRows[i].length; j++) {
+                        const weight = i === 0 ? "bold" : "normal";
+                        svgParts.push(textSvg(currentX, y, statsRows[i][j], statsSize, weight, "start"));
+                        currentX += tableW * colWeights[j];
+                    }
+                }
+            }
+
+            const svgParts = [];
+            svgParts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+            svgParts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${width} ${height}"><rect x="0" y="0" width="${width}" height="${height}" fill="white"/>`);
+
+            if (statsPlacement === "top") drawStatsTable(svgParts, topBottomOuterPad);
+
+            const legendLineGap = Math.round(14 * fontScale);
+            const legendY = Math.round(mainY0 + topPad + mainPlotH - 12 - (numSets - 1) * legendLineGap);
+            const legendTextRightX = left + plotW - Math.round(10 * fontScale);
+
+            for(let i=0; i<numSets; i++) {
+                const color = PALETTE[i % PALETTE.length];
+                const yy = legendY + i * legendLineGap;
+                const labelStr = baseDataset.labels[i];
+
+                svgParts.push(textSvg(legendTextRightX, yy+1, labelStr, tickSize, "normal", "end"));
+                
+                const estimatedTextWidth = labelStr.length * (tickSize * 0.52);
+                const legendCircleX = legendTextRightX - estimatedTextWidth - Math.round(8 * fontScale);
+                const legendLineX2 = legendCircleX + Math.round(10 * fontScale);
+                const legendLineX1 = legendCircleX - Math.round(15 * fontScale);
+
+                svgParts.push(lineSvg(legendLineX1, yy-3, legendLineX2, yy-3, color, fitSW));
+                svgParts.push(circleSvg(legendCircleX, yy-3, pointR, color, 1.0));
+            }
+
+            svgParts.push(lineSvg(left, mainY0 + topPad + mainPlotH, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, mainY0 + topPad, left, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left + plotW, mainY0 + topPad, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, mainY0 + topPad, left + plotW, mainY0 + topPad, "black", axisSW));
+
+            for (const t of xTicks) {
+                const x = xMap(t.value), yAxis = mainY0 + topPad + mainPlotH;
+                svgParts.push(lineSvg(x, yAxis, x, yAxis - tickLen, "black", tickSW));
+                svgParts.push(textSvg(x, yAxis + 20, t.label, tickSize, "normal", "middle"));
+            }
+            for (const t of yMainTicks) {
+                const y = yMapMain(t);
+                if (y < mainY0 + topPad - 0.5 || y > mainY0 + topPad + mainPlotH + 0.5) continue;
+                svgParts.push(lineSvg(left, y, left + tickLen, y, "black", tickSW));
+                svgParts.push(textSvg(left - 8, y + 4, formatTickLabel(t), tickSize, "normal", "end"));
+            }
+            svgParts.push(textSvg(left + plotW / 2, mainY0 + mainH - 6, "[H]₀ / mM", labelSize, "bold", "middle"));
+            svgParts.push(`<text x="26" y="${mainY0 + topPad + mainPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 26 ${mainY0 + topPad + mainPlotH / 2})">F₀ / F</text>`);
+
+            for(let i=0; i<numSets; i++) {
+                const color = PALETTE[i % PALETTE.length];
+                svgParts.push(`<polyline fill="none" stroke="${color}" stroke-width="${fitSW}" points="${summaries[i].curve.map(p => `${xMap(p.x)},${yMapMain(p.y)}`).join(" ")}"/>`);
+                for (const p of summaries[i].includedDataPts) svgParts.push(circleSvg(xMap(p.x), yMapMain(p.y), pointR, color, 1.1));
+            }
+
+            if (residualVisible) {
+                svgParts.push(lineSvg(left, resY0 + topPadRes + resPlotH, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW));
+                svgParts.push(lineSvg(left, resY0 + topPadRes, left, resY0 + topPadRes + resPlotH, "black", axisSW));
+                svgParts.push(lineSvg(left + plotW, resY0 + topPadRes, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW));
+                svgParts.push(lineSvg(left, resY0 + topPadRes, left + plotW, resY0 + topPadRes, "black", axisSW));
+                for (const t of xTicks) {
+                    const x = xMap(t.value), yAxis = resY0 + topPadRes + resPlotH;
+                    svgParts.push(lineSvg(x, yAxis, x, yAxis - tickLen, "black", tickSW));
+                    svgParts.push(textSvg(x, yAxis + 18, t.label, tickSize, "normal", "middle"));
+                }
+                for (const t of yResTicks) {
+                    const y = yMapRes(t);
+                    if (y < resY0 + topPadRes - 0.5 || y > resY0 + topPadRes + resPlotH + 0.5) continue;
+                    svgParts.push(lineSvg(left, y, left + plotW, y, "#ebebeb", 0.6));
+                    svgParts.push(lineSvg(left, y, left + tickLen, y, "black", tickSW));
+                    svgParts.push(textSvg(left - 8, y + 4, formatTickLabel(t), tickSize, "normal", "end"));
+                }
+                const zeroY = yMapRes(0);
+                svgParts.push(lineSvg(left, zeroY, left + plotW, zeroY, "black", 0.9, "7 5"));
+
+                for(let i=0; i<numSets; i++) {
+                    const color = PALETTE[i % PALETTE.length];
+                    for (const p of summaries[i].includedResPts) svgParts.push(`<circle cx="${xMap(p.x)}" cy="${yMapRes(p.y)}" r="${residualPointR}" fill="${color}"/>`);
+                }
+                svgParts.push(`<text x="26" y="${resY0 + topPadRes + resPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 26 ${resY0 + topPadRes + resPlotH / 2})">Residual</text>`);
+            }
+
+            svgParts.push(`</svg>`);
+            return { svg: svgParts.join(""), widthMm, heightMm };
+        }
+
+        function triggerBlobDownload(blob, filename) { const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = filename; link.style.display = "none"; document.body.appendChild(link); link.click(); setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 1500); }
+        function downloadTextFile(filename, content, mime = "text/plain;charset=utf-8") { triggerBlobDownload(new Blob([content], { type: mime }), filename); }
+
+        async function exportPngFromSvg() {
+            const { svg, widthMm, heightMm } = buildSVGString(), dpi = Math.max(300, parseInt($("expDpi").value, 10) || 600);
+            const pxWidth = Math.max(1, Math.round((widthMm / 25.4) * dpi)), pxHeight = Math.max(1, Math.round((heightMm / 25.4) * dpi));
+            const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+            try {
+                const img = new Image(); img.decoding = "sync"; img.crossOrigin = "anonymous";
+                await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+                const canvas = document.createElement("canvas"); canvas.width = pxWidth; canvas.height = pxHeight;
+                const ctx = canvas.getContext("2d", { alpha: false }); ctx.fillStyle = "white"; ctx.fillRect(0, 0, pxWidth, pxHeight); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, pxWidth, pxHeight);
+                const pngBlob = await new Promise((res, rej) => canvas.toBlob(b => b ? res(b) : rej(), "image/png"));
+                triggerBlobDownload(pngBlob, `Figure_1_stern_volmer_${Math.round(widthMm)}mm_${dpi}dpi.png`);
+            } finally { URL.revokeObjectURL(url); }
+        }
+
+        async function exportPdfFromSvg() {
+            const { svg, widthMm, heightMm } = buildSVGString(), jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+            const dpi = Math.max(300, parseInt($("expDpi").value, 10) || 600), pxWidth = Math.max(1, Math.round((widthMm / 25.4) * dpi)), pxHeight = Math.max(1, Math.round((heightMm / 25.4) * dpi));
+            const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
+            try {
+                const img = new Image(); img.decoding = "sync"; img.crossOrigin = "anonymous";
+                await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+                const canvas = document.createElement("canvas"); canvas.width = pxWidth; canvas.height = pxHeight;
+                const ctx = canvas.getContext("2d", { alpha: false }); ctx.fillStyle = "white"; ctx.fillRect(0, 0, pxWidth, pxHeight); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(img, 0, 0, pxWidth, pxHeight);
+                const pdf = new jsPDFCtor({ orientation: widthMm >= heightMm ? "landscape" : "portrait", unit: "mm", format: [widthMm, heightMm], compress: true });
+                pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, widthMm, heightMm, undefined, "FAST"); pdf.save(`Figure_1_stern_volmer_${Math.round(widthMm)}mm.pdf`);
+            } finally { URL.revokeObjectURL(url); }
+        }
+
+        ["statsPlacement", "residualPlacement", "exportLogX"].forEach((id) => { const el = $(id); if (el) { el.addEventListener("change", applyDynamicExportPreset); el.addEventListener("input", applyDynamicExportPreset); } });
+        $("pdfBtn").addEventListener("click", async () => { try { await exportPdfFromSvg(); } catch (err) { showError(err.message || "PDF export failed."); } });
+        $("pngBtn").addEventListener("click", async () => { try { await exportPngFromSvg(); } catch (err) { showError(err.message || "PNG export failed."); } });
+        $("svgBtn").addEventListener("click", () => { try { const { svg, widthMm } = buildSVGString(); downloadTextFile(`Figure_1_stern_volmer_${Math.round(widthMm)}mm.svg`, svg, "image/svg+xml"); } catch (err) { showError(err.message); } });
+
+        syncDatasetCount();
+        applyJournalTheme($("journalTheme").value); applyDynamicExportPreset(); safeUpdate(false);
+    </script>
+</body>
+</html>
