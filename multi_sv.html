@@ -109,6 +109,25 @@ Condition B</textarea>
 
         <div class="control-group">
             <div class="label-row">
+                <span>Fit Preset</span>
+                <div class="right-side">
+                    <select id="fitPreset" class="val-input" style="width:180px; text-align:left;">
+                        <option value="custom" selected>Custom</option>
+                        <option value="temp_recommended">Temp series: n=1, α=0</option>
+                        <option value="temp_shared_alpha">Temp series: n=1, shared α</option>
+                        <option value="independent_n1_a0">Independent: n=1, α=0</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:8px;">
+                <button id="applyPresetBtn" type="button" style="background-color:#495057;">Apply Preset</button>
+                <button id="compareModelsBtn" type="button" style="background-color:#6f42c1;">Compare Presets</button>
+            </div>
+            <div class="hint-text" style="text-align:left; margin-top:6px;">Recommended for temperature series: shared n = 1 and α = 0 first; if needed, test shared α as a second model.</div>
+        </div>
+
+        <div class="control-group">
+            <div class="label-row">
                 <span><i>K</i><sub>d</sub></span>
                 <div class="right-side"><input type="checkbox" id="fix_Kd"> Fix <input type="text" id="Kd_num" class="val-input" value="100.0000 nM"></div>
             </div>
@@ -215,6 +234,7 @@ Condition B</textarea>
         let lastFitDiagnosticsArray = null;
         let paramsStore = []; 
         let excludedIndices = new Set();
+        let lastModelComparison = null;
 
         const PALETTE = ["black", "#d62728", "#1f77b4", "#2ca02c", "#9467bd", "#8c564b", "#e377c2", "#ff7f0e"];
 
@@ -411,6 +431,152 @@ Condition B</textarea>
             return ($("allSetsMode") && $("allSetsMode").value === "global") ? "Global shared n/α fit" : "Independent fits";
         }
 
+        function cloneParamsStore() {
+            return paramsStore.map(p => ({ ...p }));
+        }
+
+        function applyFitPreset(presetKey, silent = false) {
+            if (!presetKey || presetKey === "custom") return;
+            const currentActive = $("activeDatasetIndex").value;
+            $("activeDatasetIndex").value = "all";
+            if (presetKey === "temp_recommended") {
+                $("allSetsMode").value = "global";
+                $("n_num").value = "1.0000";
+                $("alpha_num").value = "0.0000";
+                $("fix_n").checked = true;
+                $("fix_alpha").checked = true;
+                $("fix_Kd").checked = false;
+                $("fix_KSV").checked = false;
+            } else if (presetKey === "temp_shared_alpha") {
+                $("allSetsMode").value = "global";
+                $("n_num").value = "1.0000";
+                $("alpha_num").value = "0.0200";
+                $("fix_n").checked = true;
+                $("fix_alpha").checked = false;
+                $("fix_Kd").checked = false;
+                $("fix_KSV").checked = false;
+            } else if (presetKey === "independent_n1_a0") {
+                $("allSetsMode").value = "copy";
+                $("n_num").value = "1.0000";
+                $("alpha_num").value = "0.0000";
+                $("fix_n").checked = true;
+                $("fix_alpha").checked = true;
+                $("fix_Kd").checked = false;
+                $("fix_KSV").checked = false;
+            }
+            syncKdSliderFromInput();
+            syncAlphaFromNumber();
+            syncKSVFromNumber();
+            saveActiveParamsFromUI();
+            if (currentActive !== "all" && presetKey !== "custom") $("activeDatasetIndex").value = "all";
+            loadActiveParamsToUI();
+            if (!silent) safeUpdate(false);
+        }
+
+        function countEffectiveParameters(numSets) {
+            const fixed = { Kd: $("fix_Kd").checked, n: $("fix_n").checked, alpha: $("fix_alpha").checked, KSV: $("fix_KSV").checked };
+            if (isGlobalSharedMode()) {
+                return (fixed.Kd ? 0 : numSets) + (fixed.KSV ? 0 : numSets) + (fixed.n ? 0 : 1) + (fixed.alpha ? 0 : 1);
+            }
+            return numSets * ((fixed.Kd ? 0 : 1) + (fixed.KSV ? 0 : 1) + (fixed.n ? 0 : 1) + (fixed.alpha ? 0 : 1));
+        }
+
+        function infoCriteria(totalSSE, nObs, k) {
+            if (!Number.isFinite(totalSSE) || totalSSE <= 0 || !Number.isFinite(nObs) || nObs <= 0) return { aic: NaN, bic: NaN };
+            const aic = nObs * Math.log(totalSSE / nObs) + 2 * k;
+            const bic = nObs * Math.log(totalSSE / nObs) + k * Math.log(nObs);
+            return { aic, bic };
+        }
+
+        function trustLevelFromWarnings(warnings) {
+            if (!warnings || !warnings.length) return "Good";
+            const severe = warnings.filter(w => /ill-conditioned|not be estimated|Very few included|large relative|approaches zero|clipped/.test(w)).length;
+            if (severe >= 2 || warnings.length >= 4) return "Poor";
+            return "Caution";
+        }
+
+        function snapshotFitterState() {
+            return {
+                params: cloneParamsStore(),
+                activeDataset: $("activeDatasetIndex").value,
+                allSetsMode: $("allSetsMode").value,
+                fitPreset: $("fitPreset") ? $("fitPreset").value : "custom",
+                ui: {
+                    Kd_num: $("Kd_num").value,
+                    n_num: $("n_num").value,
+                    alpha_num: $("alpha_num").value,
+                    KSV_num: $("KSV_num").value,
+                    fix_Kd: $("fix_Kd").checked,
+                    fix_n: $("fix_n").checked,
+                    fix_alpha: $("fix_alpha").checked,
+                    fix_KSV: $("fix_KSV").checked
+                },
+                diagnostics: lastFitDiagnosticsArray ? JSON.parse(JSON.stringify(lastFitDiagnosticsArray)) : null
+            };
+        }
+
+        function restoreFitterState(snap) {
+            paramsStore = snap.params.map(p => ({ ...p }));
+            $("activeDatasetIndex").value = snap.activeDataset;
+            $("allSetsMode").value = snap.allSetsMode;
+            if ($("fitPreset")) $("fitPreset").value = snap.fitPreset;
+            $("Kd_num").value = snap.ui.Kd_num;
+            $("n_num").value = snap.ui.n_num;
+            $("alpha_num").value = snap.ui.alpha_num;
+            $("KSV_num").value = snap.ui.KSV_num;
+            $("fix_Kd").checked = snap.ui.fix_Kd;
+            $("fix_n").checked = snap.ui.fix_n;
+            $("fix_alpha").checked = snap.ui.fix_alpha;
+            $("fix_KSV").checked = snap.ui.fix_KSV;
+            lastFitDiagnosticsArray = snap.diagnostics ? JSON.parse(JSON.stringify(snap.diagnostics)) : null;
+            loadActiveParamsToUI();
+        }
+
+        function evaluateCurrentModelSummary() {
+            const baseDataset = readInputs();
+            const summaries = [];
+            for (let i = 0; i < baseDataset.sv_arrays.length; i++) {
+                const ds = buildSingleDataset(baseDataset, i, { n: paramsStore[i].n, alpha: paramsStore[i].alpha });
+                ds.Kd = paramsStore[i].Kd;
+                ds.KSV = paramsStore[i].KSV;
+                summaries.push(computeFitSummary(ds, i));
+            }
+            const totalIncluded = summaries.reduce((a, s) => a + s.includedCount, 0);
+            const totalWeightedSSE = summaries.reduce((a, s) => a + (Number.isFinite(s.weightedSSE) ? s.weightedSSE : 0), 0);
+            const k = countEffectiveParameters(baseDataset.sv_arrays.length);
+            const ic = infoCriteria(totalWeightedSSE, totalIncluded, k);
+            return { summaries, totalIncluded, totalWeightedSSE, k, ...ic };
+        }
+
+        function comparePresetModels() {
+            const snap = snapshotFitterState();
+            const comparisons = [];
+            const modes = [
+                { key: "temp_recommended", label: "Shared n=1, α=0" },
+                { key: "temp_shared_alpha", label: "Shared n=1, free α" },
+                { key: "independent_n1_a0", label: "Independent n=1, α=0" }
+            ];
+            for (const mode of modes) {
+                applyFitPreset(mode.key, true);
+                if (isGlobalSharedMode()) fitGlobalShared();
+                else {
+                    for (let i = 0; i < paramsStore.length; i++) fitDataset(i);
+                }
+                const evalResult = evaluateCurrentModelSummary();
+                comparisons.push({
+                    mode: mode.label,
+                    aic: evalResult.aic,
+                    bic: evalResult.bic,
+                    weightedSSE: evalResult.totalWeightedSSE,
+                    k: evalResult.k,
+                    included: evalResult.totalIncluded
+                });
+            }
+            comparisons.sort((a, b) => (a.bic - b.bic));
+            restoreFitterState(snap);
+            lastModelComparison = comparisons;
+            safeUpdate(false);
+        }
 
         function loadActiveParamsToUI() {
             const select = $("activeDatasetIndex");
@@ -734,6 +900,13 @@ Condition B</textarea>
             $(id).addEventListener("change", () => { saveActiveParamsFromUI(); safeUpdate(false); });
         });
 
+        $("allSetsMode").addEventListener("change", () => { loadActiveParamsToUI(); safeUpdate(false); });
+        $("applyPresetBtn").addEventListener("click", () => { applyFitPreset($("fitPreset").value); });
+        $("compareModelsBtn").addEventListener("click", () => {
+            try { comparePresetModels(); }
+            catch (err) { showError(err.message || "Could not compare preset models."); }
+        });
+
         $("I0").addEventListener("input", () => { safeUpdate(false); });
         $("weightMode").addEventListener("change", () => { safeUpdate(false); });
         $("dataFile").addEventListener("change", async (event) => { clearError(); const file = event.target.files && event.target.files[0]; if (file) await handleDataFile(file); });
@@ -799,7 +972,9 @@ Condition B</textarea>
             const activeText = activeIdx === -1 ? `All sets | ${isGlobalSharedMode() ? "global shared n/α fit" : numSets + " independent fits"}` : `Active = ${baseDataset.labels[activeIdx]}`;
             const totalIncluded = summaries.reduce((s, item) => s + item.includedCount, 0);
             const totalExcluded = summaries.reduce((s, item) => s + item.excludedCount, 0);
-            statusBox.textContent = `${activeText}   |   [I]₀ = ${baseDataset.I0.toFixed(6)} mM   |   included = ${totalIncluded}   |   excluded = ${totalExcluded}`;
+            const allWarnings = summaries.flatMap((summary, i) => buildWarnings(paramsStore[i], summary, lastFitDiagnosticsArray ? lastFitDiagnosticsArray[i] : null, { Kd: paramsStore[i].fix_Kd, n: paramsStore[i].fix_n, alpha: paramsStore[i].fix_alpha, KSV: paramsStore[i].fix_KSV }));
+            const trust = trustLevelFromWarnings(allWarnings);
+            statusBox.textContent = `${activeText}   |   [I]₀ = ${baseDataset.I0.toFixed(6)} mM   |   included = ${totalIncluded}   |   excluded = ${totalExcluded}   |   trust = ${trust}`;
             updateFitReport(baseDataset.labels, paramsStore, lastFitDiagnosticsArray, summaries);
         }
 
@@ -1004,34 +1179,55 @@ Condition B</textarea>
 
         function updateFitReport(labels, paramsList, diagnosticsArray, summaries) {
             const lines = [];
-            if (isGlobalSharedMode()) {
-                const diag0 = diagnosticsArray && diagnosticsArray[0] ? diagnosticsArray[0] : null;
-                const summaryTotals = summaries.reduce((acc, s) => {
-                    acc.included += s.includedCount;
-                    acc.excluded += s.excludedCount;
-                    acc.weightedSSE += Number.isFinite(s.weightedSSE) ? s.weightedSSE : 0;
-                    return acc;
-                }, {included:0, excluded:0, weightedSSE:0});
-                lines.push("GLOBAL SHARED n/α FIT");
-                lines.push(`All Sets mode: ${globalModeLabel()}`);
-                lines.push(diag0 && diag0.seed ? `Shared-mode optimization: ${diag0.seed.tested} Kd/KSV combinations tested.` : `Shared-mode optimization: not run.`);
-                lines.push(diag0 ? `Optimizer: Levenberg–Marquardt${diag0.converged ? " (converged)" : " (stopped)"}, iterations = ${diag0.iterations ?? 0}` : `Optimizer: n/a`);
-                lines.push(`Total included = ${summaryTotals.included} | Total excluded = ${summaryTotals.excluded} | Weighted SSE = ${Number.isFinite(summaryTotals.weightedSSE) ? summaryTotals.weightedSSE.toPrecision(5) : "n/a"}`);
+            const totalIncluded = summaries.reduce((acc, s) => acc + s.includedCount, 0);
+            const totalWeightedSSE = summaries.reduce((acc, s) => acc + (Number.isFinite(s.weightedSSE) ? s.weightedSSE : 0), 0);
+            const kEff = countEffectiveParameters(labels.length);
+            const globalIC = infoCriteria(totalWeightedSSE, totalIncluded, kEff);
+
+            lines.push(isGlobalSharedMode() ? "GLOBAL SHARED n/α FIT" : "INDEPENDENT MULTI-DATASET FIT");
+            lines.push(`All Sets mode: ${globalModeLabel()}`);
+            lines.push(`Effective free parameters = ${kEff} | Total included = ${totalIncluded} | Weighted SSE = ${Number.isFinite(totalWeightedSSE) ? totalWeightedSSE.toPrecision(5) : "n/a"}`);
+            lines.push(`AIC = ${Number.isFinite(globalIC.aic) ? globalIC.aic.toFixed(2) : "n/a"} | BIC = ${Number.isFinite(globalIC.bic) ? globalIC.bic.toFixed(2) : "n/a"}`);
+            lines.push("");
+
+            if (lastModelComparison && lastModelComparison.length) {
+                lines.push("MODEL COMPARISON (lower BIC is preferred)");
+                lastModelComparison.forEach((row, idx) => {
+                    lines.push(`${idx === 0 ? "★ " : "  "}${row.mode} | BIC = ${Number.isFinite(row.bic) ? row.bic.toFixed(2) : "n/a"} | AIC = ${Number.isFinite(row.aic) ? row.aic.toFixed(2) : "n/a"} | Weighted SSE = ${Number.isFinite(row.weightedSSE) ? row.weightedSSE.toPrecision(5) : "n/a"}`);
+                });
                 lines.push("");
             }
+
             for(let i=0; i<paramsList.length; i++) {
                 const params = paramsList[i];
                 const summary = summaries[i];
                 const diag = diagnosticsArray && diagnosticsArray[i] ? diagnosticsArray[i] : null;
                 const se = diag && diag.standardErrors ? diag.standardErrors : {};
                 const fixed = { Kd: params.fix_Kd, n: params.fix_n, alpha: params.fix_alpha, KSV: params.fix_KSV };
-                
+                const warnings = buildWarnings(params, summary, diag, fixed);
+                const trust = trustLevelFromWarnings(warnings);
+                const nObs = summary.includedCount;
+                const kLocal = (fixed.Kd ? 0 : 1) + (fixed.n ? 0 : 1) + (fixed.alpha ? 0 : 1) + (fixed.KSV ? 0 : 1);
+                const localIC = infoCriteria(summary.weightedSSE, nObs, Math.max(kLocal, 1));
+                const redChi2 = diag && Number.isFinite(diag.sigma2) ? diag.sigma2 : NaN;
+                const cond = approxConditionNumber(diag ? diag.covariance : null);
+                const excludedIdx = summary.excludedResPts.map(p => p.pointIndex).join(", ");
+
                 lines.push(`--- ${labels[i].toUpperCase()} ---`);
                 lines.push(`Kd = ${formatKdWithSigFigs(params.Kd, fixed.Kd ? 0 : se.Kd)}${fixed.Kd ? " (fixed)" : ""}`);
-                lines.push(`n = ${formatNormalWithSigFigs(params.n, fixed.n ? 0 : se.n)}${fixed.n ? " (fixed)" : ""}`);
-                lines.push(`α = ${formatNormalWithSigFigs(params.alpha, fixed.alpha ? 0 : se.alpha)}${fixed.alpha ? " (fixed)" : ""}`);
+                lines.push(`n = ${formatNormalWithSigFigs(params.n, fixed.n ? 0 : se.n)}${fixed.n ? " (fixed/shared)" : ""}`);
+                lines.push(`α = ${formatNormalWithSigFigs(params.alpha, fixed.alpha ? 0 : se.alpha)}${fixed.alpha ? " (fixed/shared)" : ""}`);
                 lines.push(`kq·τ0 = ${formatNormalWithSigFigs(params.KSV, fixed.KSV ? 0 : se.KSV)} mM⁻¹${fixed.KSV ? " (fixed)" : ""}`);
                 lines.push(`RMSE = ${Number.isFinite(summary.rmse) ? summary.rmse.toPrecision(3) : "n/a"} | R² = ${Number.isFinite(summary.r2) ? summary.r2.toFixed(3) : "n/a"} | Included = ${summary.includedCount} / Excluded = ${summary.excludedCount}`);
+                lines.push(`Weighted SSE = ${Number.isFinite(summary.weightedSSE) ? summary.weightedSSE.toPrecision(5) : "n/a"} | AIC = ${Number.isFinite(localIC.aic) ? localIC.aic.toFixed(2) : "n/a"} | BIC = ${Number.isFinite(localIC.bic) ? localIC.bic.toFixed(2) : "n/a"} | reduced χ² = ${Number.isFinite(redChi2) ? redChi2.toPrecision(3) : "n/a"}`);
+                lines.push(`Optimizer = ${diag ? (diag.converged ? "LM converged" : "LM stopped") : "n/a"} | Covariance condition ≈ ${Number.isFinite(cond) ? cond.toExponential(2) : "n/a"} | Trust = ${trust}`);
+                lines.push(`Excluded indices: ${excludedIdx || "none"}`);
+                if (warnings.length) {
+                    lines.push("Warnings:");
+                    warnings.forEach(w => lines.push(`- ${w}`));
+                } else {
+                    lines.push("Warnings: none");
+                }
                 lines.push("");
             }
             fitReportBox.textContent = lines.join("\n");
@@ -1145,6 +1341,7 @@ Condition B</textarea>
             
             setTimeout(() => {
                 try { 
+                    lastModelComparison = null;
                     if (val === "all") {
                         if (isGlobalSharedMode()) fitGlobalShared();
                         else for(let i=0; i<paramsStore.length; i++) fitDataset(i);
