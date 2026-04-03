@@ -5,6 +5,8 @@
     <title>Quenching Analysis</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvg@4.0.1/lib/umd.min.js"></script>
     <script>
         window.MathJax = {
             tex: { inlineMath: [['\\(', '\\)']], displayMath: [['\\[', '\\]']] },
@@ -14,7 +16,7 @@
     <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
         body {
-            font-family: "Segoe UI", Arial, sans-serif;
+            font-family: Arial, Helvetica, sans-serif;
             display: flex;
             margin: 0;
             background-color: #f4f4f9;
@@ -29,7 +31,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            gap: 15px;
+            gap: 24px;
             background: #fff;
         }
 
@@ -41,8 +43,8 @@
             background: white;
         }
 
-        .main-plot-wrapper { flex: 2.5; }
-        .residual-plot-wrapper { flex: 1; }
+        .main-plot-wrapper { flex: 5; }
+        .residual-plot-wrapper { flex: 0.9; }
 
         .controls {
             width: 40%;
@@ -118,7 +120,9 @@
         #resultBtn { background-color: #007bff; }
         #pngBtn { background-color: #000; margin-top: 10px; }
         #svgBtn { background-color: #6f42c1; margin-top: 10px; }
-        #presetSingleBtn, #presetDoubleBtn { background-color: #555; }
+        #pdfBtn { background-color: #c0392b; margin-top: 10px; }
+        #csvBtn { background-color: #1f7a4c; margin-top: 10px; }
+        .theme-note { font-size: 0.72rem; color: #555; line-height: 1.35; margin-top: 6px; }
 
         .export-box {
             background: #eee;
@@ -220,6 +224,19 @@
             font-size: 0.8rem;
             color: #333;
             min-height: 1.2em;
+            white-space: pre-line;
+        }
+
+        .fit-report {
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: #f6f6f6;
+            border: 1px solid #d7d7d7;
+            border-radius: 4px;
+            font-size: 0.78rem;
+            color: #222;
+            line-height: 1.45;
+            white-space: pre-line;
         }
 
         .hint-text {
@@ -301,6 +318,7 @@
             <div style="flex:1;">
                 <label style="font-size:0.8rem; font-weight: bold;">[I]₀ / mM</label>
                 <input type="text" inputmode="decimal" id="I0" step="0.00001" value="0.00025" style="width:100%;">
+
             </div>
             <div style="flex:1;">
                 <label style="font-size:0.8rem; font-weight: bold;">F₀ / a.u.</label>
@@ -357,8 +375,26 @@
                     <div class="hint-text"><i>k</i><sub>q</sub>·τ<sub>0</sub> = Dynamic quenching parameter (range 0–100; log slider) </div>
         </div>
 
+        <div class="control-group">
+            <div class="label-row">
+                <span>Weighted Fitting</span>
+                <div class="right-side">
+                    <select id="weightMode" class="val-input" style="width:140px; text-align:left;">
+                        <option value="none">None</option>
+                        <option value="invF">1 / F</option>
+                        <option value="invF2">1 / F²</option>
+                    </select>
+                </div>
+            </div>
+            <div class="hint-text">Optional weighting for heteroscedastic fluorescence noise.</div>
+        </div>
+
         <h3>3. Analysis</h3>
         <button id="autoFitBtn">Snap to Fit</button>
+        <div style="display:flex; gap:10px; margin-top:8px;">
+            <button id="clearExcludedBtn" type="button" style="background-color:#6c757d;">Clear Excluded Points</button>
+        </div>
+        <div class="hint-text" style="text-align:left; margin-top:6px;">Tip: click a point in the residual plot to exclude or restore it from the fit.</div>
 
         <div class="formula-box">
             <div class="formula-title">Quenching Model:</div>
@@ -377,27 +413,49 @@
 
         <button id="resultBtn">Apply Final Labels</button>
         <div id="statusBox" class="status-box"></div>
+        <h3 style="margin-top:18px;">4. Report</h3>
+        <div id="fitReportBox" class="fit-report">Fit report will appear here after update.</div>
 
         <div class="export-box">
             <span class="export-title">Publication Export Settings</span>
             <div class="export-row">
-                <button id="presetSingleBtn" type="button">Preset: Single Column</button>
-                <button id="presetDoubleBtn" type="button">Preset: Double Column</button>
+                Journal theme:
+                <select id="journalTheme" style="width:150px;">
+                    <option value="wiley" selected>Wiley</option>
+                    <option value="nature">Nature</option>
+                    <option value="acs">ACS</option>
+                    <option value="rsc">RSC</option>
+                    <option value="elsevier">Elsevier</option>
+                </select>
             </div>
+            <div class="theme-note" id="journalThemeNote">Publisher-inspired preset; exact figure rules can vary by journal.</div>
             <div class="export-row">
                 Width: <input type="number" id="expWmm" value="80" step="1" style="width:70px;"> mm
                 Height: <input type="number" id="expHmm" value="88" step="1" style="width:70px;"> mm
                 DPI: <input type="number" id="expDpi" value="600" step="50" style="width:70px;">
             </div>
             <div class="export-row">
-                Axis/line scale: <input type="number" id="lineScale" value="1.5" step="0.1" style="width:60px;">
-                Font scale: <input type="number" id="fontScale" value="1.1" step="0.1" style="width:60px;">
+                Axis/frame scale: <input type="number" id="lineScale" value="1.0" step="0.1" style="width:60px;">
+                Font scale: <input type="number" id="fontScale" value="1.0" step="0.1" style="width:60px;">
             </div>
-            <div class="hint-text" style="text-align:left;">
-                Default figure layout tuned for single-column compact style.
+            <div class="export-row">
+                Stats block:
+                <select id="statsPlacement" style="width:100px;">
+                    <option value="off" selected>Off</option>
+                    <option value="top">Top</option>
+                </select>
+                Residual analysis:
+                <select id="residualPlacement" style="width:100px;">
+                    <option value="off">Off</option>
+                    <option value="bottom" selected>Bottom</option>
+                </select>
+                <label><input type="checkbox" id="exportLogX"> Log X-axis</label>
             </div>
+
             <button id="pngBtn">Export Publication PNG</button>
             <button id="svgBtn">Export SVG</button>
+            <button id="pdfBtn">Export PDF</button>
+            <button id="csvBtn">Export Fit CSV</button>
         </div>
         
         <div class="strategy-notice">
@@ -419,6 +477,52 @@
         const $ = (id) => document.getElementById(id);
         const errorBox = $("errorBox");
         const statusBox = $("statusBox");
+        const fitReportBox = $("fitReportBox");
+        let lastFitDiagnostics = null;
+
+        const JOURNAL_THEMES = {
+            wiley: {
+                width: 80, height: 88, dpi: 600, lineScale: 1.0, fontScale: 0.95,
+                note: "Wiley-inspired preset with Arial/Helvetica-style sans-serif figure text and ~6–7 pt equivalent sizing."
+            },
+            nature: {
+                width: 86, height: 78, dpi: 600, lineScale: 0.85, fontScale: 0.80,
+                note: "Nature-inspired preset with Helvetica/Arial-style sans-serif text and restrained 5–7 pt figure lettering."
+            },
+            acs: {
+                width: 85, height: 82, dpi: 600, lineScale: 0.90, fontScale: 0.78,
+                note: "ACS-inspired preset with Helvetica/Arial-style sans-serif text, lettering >= 4.5 pt, and lines >= 0.5 pt."
+            },
+            rsc: {
+                width: 80, height: 74, dpi: 600, lineScale: 0.95, fontScale: 0.88,
+                note: "RSC-inspired preset with Arial/Helvetica-style sans-serif text, compact 8 cm-wide layout, and readable reduced lettering."
+            },
+            elsevier: {
+                width: 90, height: 82, dpi: 600, lineScale: 0.75, fontScale: 1.00,
+                note: "Elsevier-inspired preset with Arial/Helvetica-style sans-serif text, 8–12 pt lettering, and clean line hierarchy."
+            }
+        };
+
+        function applyJournalTheme(themeKey) {
+            const theme = JOURNAL_THEMES[themeKey] || JOURNAL_THEMES.wiley;
+            $("expWmm").value = theme.width;
+            $("expHmm").value = theme.height;
+            $("expDpi").value = theme.dpi;
+            $("lineScale").value = theme.lineScale.toFixed(2);
+            $("fontScale").value = theme.fontScale.toFixed(2);
+            if ($("journalThemeNote")) $("journalThemeNote").textContent = theme.note;
+        }
+
+        Chart.defaults.font.family = "Arial, Helvetica, sans-serif";
+        Chart.defaults.color = "#000";
+        let excludedIndices = new Set();
+
+        function formatConcUnit(mMValue) {
+            if (!Number.isFinite(mMValue) || mMValue <= 0) return "";
+            if (mMValue < 1e-3) return `${(mMValue * 1e6).toFixed(4)} nM`;
+            if (mMValue < 1) return `${(mMValue * 1e3).toFixed(4)} µM`;
+            return `${mMValue.toFixed(4)} mM`;
+        }
 
         function parseData(text) {
             return text
@@ -469,7 +573,6 @@
             if (unit === "mm") return value;
             return NaN;
         }
-
 
         async function handleDataFile(file) {
             if (!file) return;
@@ -527,7 +630,13 @@
             const h = parseData($("h0_input").value);
             const f = parseData($("f_input").value);
             const I0 = parseFloat(normalizeDotDecimal($("I0").value));
-            const F0 = parseFloat(normalizeDotDecimal($("F0").value));
+            let F0 = parseFloat(normalizeDotDecimal($("F0").value));
+
+            const zeroIdx = h.findIndex(v => Math.abs(v) < 1e-12);
+            if (zeroIdx !== -1 && Number.isFinite(f[zeroIdx]) && f[zeroIdx] > 0) {
+                F0 = f[zeroIdx];
+                $("F0").value = F0.toFixed(4);
+            }
             const Kd = parseKdInput($("Kd_num").value);
             const n = parseFloat(normalizeDotDecimal($("n_num").value));
             const alpha = parseFloat(normalizeDotDecimal($("alpha_num").value));
@@ -547,7 +656,8 @@
             if (h.some(v => v < 0)) errors.push("[H]₀ values must be non-negative.");
 
             if (errors.length > 0) throw new Error(errors.join("\n"));
-            return { h, f, I0, F0, Kd, n, alpha, KSV };
+            const included = h.map((_, i) => !excludedIndices.has(i));
+            return { h, f, I0, F0, Kd, n, alpha, KSV, weightMode: $("weightMode").value || "none", included };
         }
 
         function calculateF(H0, I0, F0, Kd, n, alpha, KSV) {
@@ -563,45 +673,100 @@
             return Number.isFinite(value) ? value : NaN;
         }
 
-        function computeFitSummary(params) {
-            const { h, f, I0, F0, Kd, n, alpha, KSV } = params;
+        function getPointWeights(f, mode) {
+            const eps = 1e-12;
+            return f.map((value) => {
+                const v = Math.max(Math.abs(value), eps);
+                if (mode === "invF") return 1 / v;
+                if (mode === "invF2") return 1 / (v * v);
+                return 1;
+            });
+        }
 
-            const dataPts = [];
-            const resPts = [];
+        function activeIndices(dataset) {
+            const included = Array.isArray(dataset.included) ? dataset.included : dataset.h.map(() => true);
+            return included.map((flag, i) => flag ? i : -1).filter(i => i >= 0);
+        }
+
+        function weightedResidualVector(params, dataset) {
+            const weights = getPointWeights(dataset.f, dataset.weightMode || "none");
+            const residuals = [];
+            const ids = activeIndices(dataset);
+            for (const i of ids) {
+                const pred = calculateF(dataset.h[i], dataset.I0, dataset.F0, params.Kd, params.n, params.alpha, params.KSV);
+                if (!Number.isFinite(pred)) return null;
+                residuals.push((dataset.f[i] - pred) * Math.sqrt(weights[i]));
+            }
+            return residuals;
+        }
+
+        function computeFitSummary(params) {
+            const { h, f, I0, F0, Kd, n, alpha, KSV, weightMode } = params;
+            const included = Array.isArray(params.included) ? params.included : h.map(() => true);
+
+            const includedDataPts = [];
+            const excludedDataPts = [];
+            const includedResPts = [];
+            const excludedResPts = [];
             const preds = [];
+            const weights = getPointWeights(f, weightMode || "none");
+            let weightedSSE = 0;
+            let ssRes = 0;
+            let ssTot = 0;
+            const activeF = [];
 
             for (let i = 0; i < h.length; i++) {
                 const pred = calculateF(h[i], I0, F0, Kd, n, alpha, KSV);
                 preds.push(pred);
-                dataPts.push({ x: h[i], y: f[i] });
-                resPts.push({ x: h[i], y: f[i] - pred });
+                const dataPoint = { x: h[i], y: f[i] };
+                const resPoint = { x: h[i], y: f[i] - pred, pointIndex: i };
+                if (included[i]) {
+                    includedDataPts.push(dataPoint);
+                    includedResPts.push(resPoint);
+                    activeF.push(f[i]);
+                } else {
+                    excludedDataPts.push(dataPoint);
+                    excludedResPts.push(resPoint);
+                }
             }
 
             if (preds.some(v => !Number.isFinite(v))) {
                 throw new Error("Model returned invalid values. Check parameter ranges.");
             }
 
-            const meanY = f.reduce((a, b) => a + b, 0) / f.length;
-            let ssRes = 0;
-            let ssTot = 0;
+            const nActive = activeF.length;
+            const meanY = nActive ? activeF.reduce((a, b) => a + b, 0) / nActive : 0;
 
             for (let i = 0; i < f.length; i++) {
-                ssRes += (f[i] - preds[i]) ** 2;
+                if (!included[i]) continue;
+                const resid = f[i] - preds[i];
+                ssRes += resid ** 2;
                 ssTot += (f[i] - meanY) ** 2;
+                weightedSSE += weights[i] * resid ** 2;
             }
 
-            const r2 = 1 - ssRes / (ssTot || 1);
-            const rmse = Math.sqrt(ssRes / f.length);
+            const r2 = nActive ? (1 - ssRes / (ssTot || 1)) : NaN;
+            const rmse = nActive ? Math.sqrt(ssRes / nActive) : NaN;
+            const weightedRMSE = nActive ? Math.sqrt(weightedSSE / nActive) : NaN;
 
-            const maxH = Math.max(...h, 1);
+            const dataMaxH = Math.max(...h, 0);
+            const plotMaxH = dataMaxH > 0
+                ? dataMaxH + Math.min(Math.max(dataMaxH * 0.08, 0.01), 0.08)
+                : 1;
             const curve = [];
             for (let i = 0; i <= 500; i++) {
-                const x = (i / 500) * maxH;
+                const x = (i / 500) * plotMaxH;
                 curve.push({ x, y: calculateF(x, I0, F0, Kd, n, alpha, KSV) });
             }
 
-            const residualRange = Math.max(1, ...resPts.map(p => Math.abs(p.y)));
-            return { dataPts, curve, resPts, r2, rmse, ssRes, residualRange, maxH };
+            const allResPts = includedResPts.concat(excludedResPts);
+            const maxAbsResidual = Math.max(0, ...allResPts.map(p => Math.abs(p.y)));
+            const residualRange = Math.max(maxAbsResidual * 1.2, 0.01);
+            return {
+                includedDataPts, excludedDataPts, curve, includedResPts, excludedResPts,
+                preds, r2, rmse, weightedRMSE, ssRes, weightedSSE, residualRange, maxH: plotMaxH, dataMaxH, weights,
+                includedCount: nActive, excludedCount: included.length - nActive
+            };
         }
 
         const mainCtx = $("quenchingChart").getContext("2d");
@@ -612,12 +777,22 @@ const mainChart = new Chart(mainCtx, {
             data: {
                 datasets: [
                     {
-                        label: "Data",
+                        label: "Data (included)",
                         data: [],
                         backgroundColor: "white",
                         borderColor: "black",
                         borderWidth: 2,
                         pointRadius: 5,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: "Data (excluded)",
+                        data: [],
+                        backgroundColor: "#d9d9d9",
+                        borderColor: "#888",
+                        borderWidth: 1.5,
+                        pointRadius: 5,
+                        pointStyle: "crossRot",
                         pointHoverRadius: 6
                     },
                     {
@@ -663,7 +838,7 @@ const mainChart = new Chart(mainCtx, {
                             autoSkip: false,
                             maxRotation: 0,
                             minRotation: 0,
-                            font: { size: 14, weight: "bold" },
+                            font: { size: 12, weight: "normal" },
                             color: "black",
                             callback: (value) => {
                                 if (Math.abs(value) < 1e-12) return "0";
@@ -676,7 +851,7 @@ const mainChart = new Chart(mainCtx, {
                         title: {
                             display: true,
                             text: "[H]₀ / mM",
-                            font: { size: 16, weight: "bold" },
+                            font: { size: 13, weight: "bold" },
                             color: "black"
                         }
                     },
@@ -693,11 +868,11 @@ const mainChart = new Chart(mainCtx, {
                                 scale.ticks = ticks.map(v => ({ value: v }));
                             }
                         },
-                        ticks: { maxTicksLimit: 10, font: { size: 14, weight: "bold" }, color: "black" },
+                        ticks: { maxTicksLimit: 10, font: { size: 12, weight: "normal" }, color: "black", callback: (value) => formatTickLabel(value) },
                         title: {
                             display: true,
                             text: "Fluorescence / a.u.",
-                            font: { size: 16, weight: "bold" },
+                            font: { size: 13, weight: "bold" },
                             color: "black"
                         }
                     }
@@ -705,8 +880,12 @@ const mainChart = new Chart(mainCtx, {
                 plugins: {
                     legend: {
                         position: "top",
+                        align: "end",
                         labels: {
-                            font: { size: 12, weight: "bold" },
+                            boxWidth: 14,
+                            boxHeight: 14,
+                            padding: 12,
+                            font: { size: 11, weight: "normal" },
                             usePointStyle: true,
                             color: "black"
                         }
@@ -719,10 +898,19 @@ const mainChart = new Chart(mainCtx, {
             data: {
                 datasets: [
                     {
-                        label: "Residuals",
+                        label: "Residuals (included)",
                         data: [],
                         backgroundColor: "black",
-                        pointRadius: 4
+                        pointRadius: 4,
+                        pointHoverRadius: 5
+                    },
+                    {
+                        label: "Residuals (excluded)",
+                        data: [],
+                        backgroundColor: "#888",
+                        pointRadius: 4,
+                        pointStyle: "crossRot",
+                        pointHoverRadius: 5
                     },
                     {
                         label: "Zero",
@@ -779,18 +967,18 @@ const mainChart = new Chart(mainCtx, {
                         title: {
                             display: true,
                             text: "[H]₀ / mM",
-                            font: { size: 12, weight: "bold" },
+                            font: { size: 11, weight: "bold" },
                             color: "black"
                         }
                     },
                     y: {
                         border: { width: 2, color: "black" },
                         grid: { color: "#d9d9d9", drawTicks: true, drawBorder: true },
-                        ticks: { maxTicksLimit: 5, color: "black" },
+                        ticks: { maxTicksLimit: 5, color: "black", font: { size: 11, weight: "normal" }, callback: (value) => formatTickLabel(value) },
                         title: {
                             display: true,
                             text: "Residual / a.u.",
-                            font: { size: 12, weight: "bold" },
+                            font: { size: 11, weight: "bold" },
                             color: "black"
                         }
                     }
@@ -805,6 +993,11 @@ const mainChart = new Chart(mainCtx, {
             return Math.min(Math.max(value, min), max);
         }
 
+        function getSymmetricXPadding(maxX) {
+            if (!Number.isFinite(maxX) || maxX <= 0) return 0.03;
+            return maxX < 1 ? Math.min(maxX * 0.04, 0.03) : Math.min(maxX * 0.03, 1.0);
+        }
+
         function alphaToSlider(alpha) {
             if (!Number.isFinite(alpha) || alpha <= 0) return 0;
             const a = clamp(alpha, 1e-4, 1);
@@ -815,7 +1008,6 @@ const mainChart = new Chart(mainCtx, {
             const tt = clamp(t, 0, 1);
             return Math.pow(10, -4 + 4 * tt);
         }
-
 
         function normalizeDotDecimal(value) {
             return String(value).replace(/,/g, ".");
@@ -946,7 +1138,9 @@ const mainChart = new Chart(mainCtx, {
             syncKSVFromNumber();
             safeUpdate(false);
         });
-
+        $("I0").addEventListener("input", () => {
+            safeUpdate(false);
+        });
 
         ["n_num", "alpha_num", "KSV_num", "I0", "F0", "Kd_num"].forEach((id) => {
             const el = $(id);
@@ -959,7 +1153,6 @@ const mainChart = new Chart(mainCtx, {
             });
         });
 
-
         ["Kd_num", "n_num", "alpha_num", "KSV_num", "I0", "F0"].forEach((id) => {
             const el = $(id);
             if (!el) return;
@@ -968,7 +1161,7 @@ const mainChart = new Chart(mainCtx, {
         });
 
         [
-            "h0_input", "f_input", "I0", "F0",
+            "h0_input", "f_input", "I0", "F0", "weightMode",
             "fix_Kd", "fix_n", "fix_alpha", "fix_KSV"
         ].forEach(id => {
             $(id).addEventListener("input", () => safeUpdate(false));
@@ -982,24 +1175,27 @@ const mainChart = new Chart(mainCtx, {
             const summary = computeFitSummary(params);
 
             const { Kd, n, alpha, KSV } = params;
-            mainChart.data.datasets[0].data = summary.dataPts;
-            mainChart.data.datasets[1].data = summary.curve;
+            mainChart.data.datasets[0].data = summary.includedDataPts;
+            mainChart.data.datasets[1].data = summary.excludedDataPts;
+            mainChart.data.datasets[2].data = summary.curve;
 
             if (labeled) {
-                mainChart.data.datasets[1].label =
+                mainChart.data.datasets[2].label =
                     `Fit | Kd=${formatKdWithUnit(Kd)} | n=${n.toFixed(4)} | α=${alpha.toFixed(4)} | kq·τ0=${KSV.toFixed(4)} mM⁻¹`;
             } else {
-                mainChart.data.datasets[1].label = "Fit";
+                mainChart.data.datasets[2].label = "Fit";
             }
 
-            resChart.data.datasets[0].data = summary.resPts;
-            resChart.data.datasets[1].data = [
+            resChart.data.datasets[0].data = summary.includedResPts;
+            resChart.data.datasets[1].data = summary.excludedResPts;
+            resChart.data.datasets[2].data = [
                 { x: 0, y: 0 },
                 { x: summary.maxH, y: 0 }
             ];
 
-            const xMinPlot = -Math.min(summary.maxH * 0.03, 1.0);
-            const xMaxPlot = summary.maxH * 1.03;
+            const xPadRight = getSymmetricXPadding(summary.maxH);
+            const xMinPlot = -xPadRight;
+            const xMaxPlot = summary.maxH + xPadRight;
 
             mainChart.options.scales.x.min = xMinPlot;
             mainChart.options.scales.x.max = xMaxPlot;
@@ -1013,7 +1209,10 @@ const mainChart = new Chart(mainCtx, {
             mainChart.update();
             resChart.update();
 
-            statusBox.textContent = `R² = ${summary.r2.toFixed(4)}   |   RMSE = ${summary.rmse.toFixed(4)}   |   SSE = ${summary.ssRes.toFixed(4)}`;
+            const r2Text = Number.isFinite(summary.r2) ? summary.r2.toFixed(4) : "n/a";
+            const rmseText = Number.isFinite(summary.rmse) ? summary.rmse.toFixed(4) : "n/a";
+            statusBox.textContent = `Kd = ${formatKdWithUnit(Kd)}   |   [I]₀ = ${formatConcUnit(I0)}   |   R² = ${r2Text}   |   RMSE = ${rmseText}   |   included = ${summary.includedCount}   |   excluded = ${summary.excludedCount}`;
+            updateFitReport(params, lastFitDiagnostics, summary);
             if (window.MathJax && window.MathJax.typesetPromise) {
                 window.MathJax.typesetPromise([document.querySelector(".formula-box")]).catch(() => {});
             }
@@ -1025,21 +1224,14 @@ const mainChart = new Chart(mainCtx, {
             } catch (err) {
                 showError(err.message);
                 statusBox.textContent = "";
+                fitReportBox.textContent = "Fit report unavailable until the model evaluates successfully.";
             }
         }
 
         function objective(params, dataset) {
-            const { h, f, I0, F0 } = dataset;
-            const { Kd, n, alpha, KSV } = params;
-
-            let sse = 0;
-            for (let i = 0; i < h.length; i++) {
-                const pred = calculateF(h[i], I0, F0, Kd, n, alpha, KSV);
-                if (!Number.isFinite(pred)) return Infinity;
-                const r = f[i] - pred;
-                sse += r * r;
-            }
-            return sse;
+            const residuals = weightedResidualVector(params, dataset);
+            if (!residuals) return Infinity;
+            return residuals.reduce((sum, r) => sum + r * r, 0);
         }
 
         function currentParamsFromUI() {
@@ -1064,77 +1256,296 @@ const mainChart = new Chart(mainCtx, {
             forceDotDecimals();
         }
 
-        function fitParameters() {
-            const dataset = readInputs();
-            let p = currentParamsFromUI();
-
-            const fixed = {
+        function getFixedFlags() {
+            return {
                 Kd: $("fix_Kd").checked,
                 n: $("fix_n").checked,
                 alpha: $("fix_alpha").checked,
                 KSV: $("fix_KSV").checked
             };
+        }
 
-            let best = objective(p, dataset);
-            if (!Number.isFinite(best)) throw new Error("Initial parameter set gives invalid model values.");
+        function sanitizeParams(p) {
+            return {
+                Kd: clamp(Number.isFinite(p.Kd) ? p.Kd : 1e-4, 1e-7, 1e2),
+                n: clamp(Number.isFinite(p.n) ? p.n : 1, 0.1, 10),
+                alpha: clamp(Number.isFinite(p.alpha) ? p.alpha : 0, 0, 1),
+                KSV: clamp(Number.isFinite(p.KSV) ? p.KSV : 0.5, 0, 100)
+            };
+        }
 
-            let stepLogKd = 0.25;
-            let stepN = 0.1;
-            let stepAlpha = 0.02;
-            let stepKSV = 0.25;
+        function freeParameterKeys(fixed) {
+            return ["Kd", "n", "alpha", "KSV"].filter((key) => !fixed[key]);
+        }
 
-            const maxIter = 3000;
+        function parameterStep(param, value) {
+            const v = Math.max(Math.abs(value), 1e-12);
+            if (param === "Kd") return Math.max(v * 1e-3, 1e-8);
+            if (param === "KSV") return Math.max(v * 1e-3, 1e-5);
+            if (param === "n") return Math.max(v * 1e-3, 1e-4);
+            if (param === "alpha") return Math.max(Math.max(v, 1e-3) * 1e-2, 1e-5);
+            return 1e-4;
+        }
 
-            for (let iter = 0; iter < maxIter; iter++) {
-                let improved = false;
-                const trials = [];
+        function parameterBounds(param) {
+            if (param === "Kd") return [1e-7, 1e2];
+            if (param === "n") return [0.1, 10];
+            if (param === "alpha") return [0, 1];
+            if (param === "KSV") return [0, 100];
+            return [-Infinity, Infinity];
+        }
 
-                if (!fixed.Kd) {
-                    trials.push({ key: "Kd", val: p.Kd * Math.pow(10, stepLogKd) });
-                    trials.push({ key: "Kd", val: p.Kd / Math.pow(10, stepLogKd) });
+        function numericJacobian(params, dataset, keys) {
+            const baseResiduals = weightedResidualVector(params, dataset);
+            if (!baseResiduals) return null;
+            const m = baseResiduals.length;
+            const p = keys.length;
+            const J = Array.from({ length: m }, () => Array(p).fill(0));
+
+            for (let col = 0; col < p; col++) {
+                const key = keys[col];
+                const step = parameterStep(key, params[key]);
+                const [lo, hi] = parameterBounds(key);
+
+                const plus = sanitizeParams({ ...params, [key]: Math.min(params[key] + step, hi) });
+                const minus = sanitizeParams({ ...params, [key]: Math.max(params[key] - step, lo) });
+
+                const rPlus = weightedResidualVector(plus, dataset);
+                const rMinus = weightedResidualVector(minus, dataset);
+                if (!rPlus || !rMinus) return null;
+
+                const denom = (plus[key] - minus[key]) || (2 * step);
+                for (let row = 0; row < m; row++) {
+                    J[row][col] = (rPlus[row] - rMinus[row]) / denom;
                 }
-                if (!fixed.n) {
-                    trials.push({ key: "n", val: clamp(p.n + stepN, 0.1, 10) });
-                    trials.push({ key: "n", val: clamp(p.n - stepN, 0.1, 10) });
-                }
-                if (!fixed.alpha) {
-                    trials.push({ key: "alpha", val: clamp(p.alpha + stepAlpha, 0, 1) });
-                    trials.push({ key: "alpha", val: clamp(p.alpha - stepAlpha, 0, 1) });
-                }
-                if (!fixed.KSV) {
-                    trials.push({ key: "KSV", val: clamp(p.KSV * Math.pow(10, stepKSV), 0, 100) });
-                    trials.push({ key: "KSV", val: clamp(p.KSV / Math.pow(10, stepKSV), 0, 100) });
-                }
+            }
+            return { J, residuals: baseResiduals };
+        }
 
-                for (const t of trials) {
-                    const candidate = { ...p, [t.key]: t.val };
-                    const sse = objective(candidate, dataset);
-                    if (sse < best) {
-                        p = candidate;
-                        best = sse;
-                        improved = true;
+        function transpose(A) {
+            return A[0].map((_, i) => A.map(row => row[i]));
+        }
+
+        function matMul(A, B) {
+            const rows = A.length;
+            const cols = B[0].length;
+            const inner = B.length;
+            const out = Array.from({ length: rows }, () => Array(cols).fill(0));
+            for (let i = 0; i < rows; i++) {
+                for (let k = 0; k < inner; k++) {
+                    const aik = A[i][k];
+                    for (let j = 0; j < cols; j++) out[i][j] += aik * B[k][j];
+                }
+            }
+            return out;
+        }
+
+        function matVecMul(A, x) {
+            return A.map(row => row.reduce((sum, v, i) => sum + v * x[i], 0));
+        }
+
+        function invertMatrix(A) {
+            const n = A.length;
+            if (!n) return [];
+            const M = A.map((row, i) => row.concat(Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))));
+
+            for (let col = 0; col < n; col++) {
+                let pivotRow = col;
+                let best = Math.abs(M[col][col]);
+                for (let r = col + 1; r < n; r++) {
+                    const val = Math.abs(M[r][col]);
+                    if (val > best) {
+                        best = val;
+                        pivotRow = r;
                     }
                 }
+                if (best < 1e-14) return null;
+                if (pivotRow !== col) [M[col], M[pivotRow]] = [M[pivotRow], M[col]];
 
-                if (!improved) {
-                    stepLogKd *= 0.85;
-                    stepN *= 0.85;
-                    stepAlpha *= 0.85;
-                    stepKSV *= 0.85;
+                const pivot = M[col][col];
+                for (let j = 0; j < 2 * n; j++) M[col][j] /= pivot;
+
+                for (let r = 0; r < n; r++) {
+                    if (r === col) continue;
+                    const factor = M[r][col];
+                    for (let j = 0; j < 2 * n; j++) M[r][j] -= factor * M[col][j];
                 }
+            }
+            return M.map(row => row.slice(n));
+        }
 
-                if (stepLogKd < 1e-5 && stepN < 1e-5 && stepAlpha < 1e-5 && stepKSV < 1e-5) {
-                    break;
+        function solveLinearSystem(A, b) {
+            const inv = invertMatrix(A);
+            if (!inv) return null;
+            return matVecMul(inv, b);
+        }
+
+        function jtJandJtr(J, residuals) {
+            const JT = transpose(J);
+            const JTJ = matMul(JT, J);
+            const JTr = JT.map(row => row.reduce((sum, v, i) => sum + v * residuals[i], 0));
+            return { JTJ, JTr };
+        }
+
+        function seededGridSearch(dataset, fixed, initial) {
+            let bestParams = sanitizeParams(initial);
+            let bestScore = objective(bestParams, dataset);
+
+            const kdGrid = fixed.Kd
+                ? [bestParams.Kd]
+                : [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2].map(v => Math.pow(10, v));
+            const ksvGrid = fixed.KSV
+                ? [bestParams.KSV]
+                : [1e-3, 3e-3, 1e-2, 3e-2, 1e-1, 3e-1, 1, 3, 10, 30, 100];
+
+            for (const kd of kdGrid) {
+                for (const ksv of ksvGrid) {
+                    const candidate = sanitizeParams({ ...bestParams, Kd: kd, KSV: ksv });
+                    const score = objective(candidate, dataset);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestParams = candidate;
+                    }
                 }
             }
 
-            writeParamsToUI(p);
+            return { params: bestParams, weightedSSE: bestScore, tested: kdGrid.length * ksvGrid.length };
+        }
+
+        function estimateStandardErrors(params, dataset, fixed) {
+            const keys = freeParameterKeys(fixed);
+            if (!keys.length) return { errors: {}, covariance: [], dof: activeIndices(dataset).length, sigma2: 0 };
+
+            const jac = numericJacobian(params, dataset, keys);
+            if (!jac) return null;
+            const { JTJ } = jtJandJtr(jac.J, jac.residuals);
+            const invJTJ = invertMatrix(JTJ);
+            if (!invJTJ) return null;
+
+            const dof = Math.max(activeIndices(dataset).length - keys.length, 1);
+            const sse = objective(params, dataset);
+            const sigma2 = sse / dof;
+            const covariance = invJTJ.map(row => row.map(v => v * sigma2));
+            const errors = {};
+
+            keys.forEach((key, i) => {
+                errors[key] = Math.sqrt(Math.max(covariance[i][i], 0));
+            });
+            return { errors, covariance, dof, sigma2 };
+        }
+
+        function levenbergMarquardtFit(seedParams, dataset, fixed) {
+            const keys = freeParameterKeys(fixed);
+            let params = sanitizeParams(seedParams);
+            let lambda = 1e-2;
+            let bestScore = objective(params, dataset);
+            if (!keys.length) return { params, weightedSSE: bestScore, iterations: 0, converged: true };
+
+            let converged = false;
+            let iterations = 0;
+
+            for (let iter = 0; iter < 120; iter++) {
+                iterations = iter + 1;
+                const jac = numericJacobian(params, dataset, keys);
+                if (!jac) break;
+
+                const { JTJ, JTr } = jtJandJtr(jac.J, jac.residuals);
+                const A = JTJ.map((row, i) => row.map((v, j) => v + (i === j ? lambda * (Math.abs(JTJ[i][i]) + 1e-12) : 0)));
+                const step = solveLinearSystem(A, JTr.map(v => -v));
+                if (!step) break;
+
+                const candidate = sanitizeParams({ ...params });
+                for (let i = 0; i < keys.length; i++) {
+                    candidate[keys[i]] = candidate[keys[i]] + step[i];
+                }
+                const sanitizedCandidate = sanitizeParams(candidate);
+                const trialScore = objective(sanitizedCandidate, dataset);
+
+                if (Number.isFinite(trialScore) && trialScore < bestScore) {
+                    params = sanitizedCandidate;
+                    if (Math.abs(bestScore - trialScore) < 1e-12 * Math.max(1, bestScore)) {
+                        bestScore = trialScore;
+                        converged = true;
+                        break;
+                    }
+                    bestScore = trialScore;
+                    lambda = Math.max(lambda / 3, 1e-7);
+                    const maxStep = Math.max(...step.map(v => Math.abs(v)), 0);
+                    if (maxStep < 1e-9) {
+                        converged = true;
+                        break;
+                    }
+                } else {
+                    lambda = Math.min(lambda * 5, 1e12);
+                }
+            }
+
+            return { params, weightedSSE: bestScore, iterations, converged };
+        }
+
+        function formatParamWithError(key, value, error, fixed) {
+            if (fixed) {
+                if (key === "Kd") return `Kd = ${formatKdWithUnit(value)} (fixed)`;
+                if (key === "KSV") return `kq·τ0 = ${value.toFixed(4)} mM⁻¹ (fixed)`;
+                if (key === "n") return `n = ${value.toFixed(4)} (fixed)`;
+                return `α = ${value.toFixed(4)} (fixed)`;
+            }
+            if (!Number.isFinite(error)) {
+                if (key === "Kd") return `Kd = ${formatKdWithUnit(value)}`;
+                if (key === "KSV") return `kq·τ0 = ${value.toFixed(4)} mM⁻¹`;
+                if (key === "n") return `n = ${value.toFixed(4)}`;
+                return `α = ${value.toFixed(4)}`;
+            }
+            if (key === "Kd") return `Kd = ${formatKdWithUnit(value)} ± ${formatKdWithUnit(error)}`;
+            if (key === "KSV") return `kq·τ0 = ${value.toFixed(4)} ± ${error.toFixed(4)} mM⁻¹`;
+            if (key === "n") return `n = ${value.toFixed(4)} ± ${error.toFixed(4)}`;
+            return `α = ${value.toFixed(4)} ± ${error.toFixed(4)}`;
+        }
+
+        function updateFitReport(params, diagnostics, summary) {
+            const fixed = getFixedFlags();
+            const se = diagnostics && diagnostics.standardErrors ? diagnostics.standardErrors : {};
+            const lines = [
+                `Weighting: ${params.weightMode === "invF" ? "1 / F" : params.weightMode === "invF2" ? "1 / F²" : "None"}`,
+                diagnostics && diagnostics.seed ? `Global seed search: ${diagnostics.seed.tested} Kd/KSV combinations tested.` : `Global seed search: not run.`,
+                diagnostics ? `Optimizer: Levenberg–Marquardt${diagnostics.converged ? " (converged)" : " (stopped)"}, iterations = ${diagnostics.iterations ?? 0}` : `Optimizer: n/a`,
+                formatParamWithError("Kd", params.Kd, se.Kd, fixed.Kd),
+                formatParamWithError("n", params.n, se.n, fixed.n),
+                formatParamWithError("alpha", params.alpha, se.alpha, fixed.alpha),
+                formatParamWithError("KSV", params.KSV, se.KSV, fixed.KSV),
+                `Unweighted RMSE = ${Number.isFinite(summary.rmse) ? summary.rmse.toFixed(4) : "n/a"} | Weighted RMSE = ${Number.isFinite(summary.weightedRMSE) ? summary.weightedRMSE.toFixed(4) : "n/a"}`,
+                `Points used in fit: ${summary.includedCount} included, ${summary.excludedCount} excluded`
+            ];
+            fitReportBox.textContent = lines.join("\n");
+        }
+
+        function fitParameters() {
+            const dataset = readInputs();
+            const fixed = getFixedFlags();
+            const initial = sanitizeParams(currentParamsFromUI());
+            const seed = seededGridSearch(dataset, fixed, initial);
+            const lm = levenbergMarquardtFit(seed.params, dataset, fixed);
+            const standardErrors = estimateStandardErrors(lm.params, dataset, fixed);
+
+            lastFitDiagnostics = {
+                seed,
+                iterations: lm.iterations,
+                converged: lm.converged,
+                weightedSSE: lm.weightedSSE,
+                standardErrors: standardErrors ? standardErrors.errors : {},
+                covariance: standardErrors ? standardErrors.covariance : null,
+                dof: standardErrors ? standardErrors.dof : null,
+                sigma2: standardErrors ? standardErrors.sigma2 : null
+            };
+
+            writeParamsToUI(lm.params);
+            return lm.params;
         }
 
         $("autoFitBtn").addEventListener("click", () => {
             const btn = $("autoFitBtn");
             btn.disabled = true;
-            btn.textContent = "FITTING...";
+            btn.textContent = "GLOBAL SEED + L-M...";
 
             try {
                 fitParameters();
@@ -1149,21 +1560,57 @@ const mainChart = new Chart(mainCtx, {
 
         $("resultBtn").addEventListener("click", () => safeUpdate(true));
 
-        $("presetSingleBtn").addEventListener("click", () => {
-            $("expWmm").value = 80;
-            $("expHmm").value = 88;
-            $("expDpi").value = 600;
-            $("lineScale").value = 1.5;
-            $("fontScale").value = 1.1;
+        $("clearExcludedBtn").addEventListener("click", () => {
+            excludedIndices.clear();
+            safeUpdate(false);
         });
 
-        $("presetDoubleBtn").addEventListener("click", () => {
-            $("expWmm").value = 160;
-            $("expHmm").value = 96;
-            $("expDpi").value = 600;
-            $("lineScale").value = 1.4;
-            $("fontScale").value = 1.0;
+        $("residualChart").addEventListener("click", (event) => {
+            const hits = resChart.getElementsAtEventForMode(event, "nearest", { intersect: true }, true);
+            if (!hits || !hits.length) return;
+            const hit = hits[0];
+            if (hit.datasetIndex !== 0 && hit.datasetIndex !== 1) return;
+            const point = resChart.data.datasets[hit.datasetIndex].data[hit.index];
+            if (!point || !Number.isInteger(point.pointIndex)) return;
+            if (excludedIndices.has(point.pointIndex)) excludedIndices.delete(point.pointIndex);
+            else excludedIndices.add(point.pointIndex);
+            safeUpdate(false);
         });
+
+                $("journalTheme").addEventListener("change", () => {
+            applyJournalTheme($("journalTheme").value);
+            safeUpdate(false);
+        });
+
+$("csvBtn").addEventListener("click", () => {
+            try {
+                downloadTextFile("quenching_fit_export.csv", buildFitCSV(), "text/csv;charset=utf-8");
+            } catch (err) {
+                showError(err.message || "Could not export CSV.");
+            }
+        });
+
+        function buildFitCSV() {
+            const params = readInputs();
+            const summary = computeFitSummary(params);
+            const rows = [["data_H0_mM","data_F_obs_au","data_F_fit_au","residual_au","included_in_fit","curve_H0_mM","curve_F_fit_au"]];
+            const maxLen = Math.max(params.h.length, summary.curve.length);
+            for (let i = 0; i < maxLen; i++) {
+                rows.push([
+                    i < params.h.length ? params.h[i] : "",
+                    i < params.f.length ? params.f[i] : "",
+                    i < params.h.length ? summary.preds[i] : "",
+                    i < params.h.length ? (params.f[i] - summary.preds[i]) : "",
+                    i < params.h.length ? (params.included[i] ? "yes" : "no") : "",
+                    i < summary.curve.length ? summary.curve[i].x : "",
+                    i < summary.curve.length ? summary.curve[i].y : ""
+                ]);
+            }
+            return rows.map(row => row.map(v => {
+                const s = String(v ?? "");
+                return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+            }).join(",")).join("\n");
+        }
 
         function niceTicks(min, max, count = 5) {
             if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return [min || 0];
@@ -1188,211 +1635,402 @@ const mainChart = new Chart(mainCtx, {
             return Array.from(new Set(ticks)).sort((a, b) => a - b);
         }
 
+        function roundToSigFigs(value, sigFigs = 3) {
+            if (!Number.isFinite(value) || value === 0) return value;
+            return Number(value.toPrecision(sigFigs));
+        }
+
+        function inferDataSigFigs() {
+            const sampleTexts = [$("h0_input").value, $("f_input").value];
+            const sigs = [];
+            sampleTexts.forEach(text => {
+                String(text).split(/[\s,;]+/).forEach(tok => {
+                    const s = tok.trim();
+                    if (!s || !/^[-+]?\d*\.?\d+(?:e[-+]?\d+)?$/i.test(s)) return;
+                    const cleaned = s.replace(/^[-+]/, "").toLowerCase();
+                    if (cleaned.includes("e")) return;
+                    const parts = cleaned.split(".");
+                    const intPart = (parts[0] || "").replace(/^0+/, "");
+                    const decPart = parts[1] || "";
+                    const sf = (intPart + decPart).replace(/^0+/, "").length;
+                    if (sf > 0) sigs.push(sf);
+                });
+            });
+            if (!sigs.length) return 3;
+            sigs.sort((a,b)=>a-b);
+            return Math.min(4, Math.max(2, sigs[Math.floor(sigs.length/2)] || 3));
+        }
+
+        function decimalsFromStep(step) {
+            if (!Number.isFinite(step) || step <= 0) return 0;
+            const s = step.toExponential();
+            const m = s.match(/e([-+]?\d+)/i);
+            const exp = m ? Number(m[1]) : 0;
+            return Math.max(0, -exp);
+        }
+
+        function formatPlainByPrecision(value, sigFigs = 3) {
+            if (!Number.isFinite(value)) return "n/a";
+            const rounded = roundToSigFigs(value, sigFigs);
+            if (rounded === 0) return "0";
+            const decimals = Math.max(0, sigFigs - 1 - Math.floor(Math.log10(Math.abs(rounded))));
+            return rounded.toFixed(Math.min(6, decimals));
+        }
+
+        function chooseConcUnit(valuemM) {
+            if (!Number.isFinite(valuemM) || valuemM <= 0) return { scale: 1, unit: "mM" };
+            if (valuemM < 1e-3) return { scale: 1e6, unit: "nM" };
+            if (valuemM < 1) return { scale: 1e3, unit: "µM" };
+            return { scale: 1, unit: "mM" };
+        }
+
+        function formatConcRounded(valuemM, sigFigs = 3) {
+            if (!Number.isFinite(valuemM)) return "n/a";
+            const { scale, unit } = chooseConcUnit(valuemM);
+            return `${formatPlainByPrecision(valuemM * scale, sigFigs)} ${unit}`;
+        }
+
+        function formatConcWithError(valuemM, errmM, sigFigs = 3) {
+            if (!Number.isFinite(valuemM)) return "n/a";
+            if (!Number.isFinite(errmM) || errmM <= 0) return formatConcRounded(valuemM, sigFigs);
+            const { scale, unit } = chooseConcUnit(valuemM);
+            const value = valuemM * scale;
+            const err = errmM * scale;
+            const errSig = err < 3 * Math.pow(10, Math.floor(Math.log10(err))) ? 2 : 1;
+            const errRounded = roundToSigFigs(err, errSig);
+            const decimals = Math.max(0, -Math.floor(Math.log10(Math.abs(errRounded))) + (errSig - 1));
+            const valRounded = Number(value.toFixed(Math.min(6, decimals)));
+            return `${valRounded.toFixed(Math.min(6, decimals))} ± ${errRounded.toFixed(Math.min(6, decimals))} ${unit}`;
+        }
+
+        function formatValueWithError(value, err, sigFigs = 3, suffix = "") {
+            if (!Number.isFinite(value)) return "n/a";
+            if (!Number.isFinite(err) || err <= 0) return `${formatPlainByPrecision(value, sigFigs)}${suffix}`;
+            const errSig = err < 3 * Math.pow(10, Math.floor(Math.log10(err))) ? 2 : 1;
+            const errRounded = roundToSigFigs(err, errSig);
+            if (Math.abs(value) < errRounded) return `≈ 0${suffix}`;
+            const decimals = Math.max(0, -Math.floor(Math.log10(Math.abs(errRounded))) + (errSig - 1));
+            const shownDecimals = Math.min(4, decimals);
+            const valRounded = Number(value.toFixed(shownDecimals));
+            return `${valRounded.toFixed(shownDecimals)} ± ${errRounded.toFixed(shownDecimals)}${suffix}`;
+        }
+
+        function getExportDisplayRows(params, summary) {
+            const sigFigs = inferDataSigFigs();
+            const se = lastFitDiagnostics && lastFitDiagnostics.standardErrors ? lastFitDiagnostics.standardErrors : {};
+            return [
+                ["Kd", formatConcWithError(params.Kd, se.Kd, sigFigs)],
+                ["n", formatValueWithError(params.n, se.n, sigFigs)],
+                ["α", formatValueWithError(params.alpha, se.alpha, sigFigs)],
+                ["kq·τ0", formatValueWithError(params.KSV, se.KSV, sigFigs, " mM⁻¹")],
+                ["[I]₀", formatConcRounded(params.I0, sigFigs)],
+                ["R²", Number.isFinite(summary.r2) ? summary.r2.toFixed(4) : "n/a"],
+                ["RMSE", Number.isFinite(summary.rmse) ? formatPlainByPrecision(summary.rmse, sigFigs) : "n/a"],
+                ["Included", `${summary.includedCount}`],
+                ["Excluded", `${summary.excludedCount}`]
+            ];
+        }
+
+        function formatTickLabel(value) {
+            if (!Number.isFinite(value)) return "";
+            if (Math.abs(value) < 1e-12) return "0";
+            const abs = Math.abs(value);
+            if (abs >= 100) return String(Math.round(value));
+            if (abs >= 10) return Number(value).toFixed(0);
+            if (abs >= 1) return Number(value).toFixed(1).replace(/\.0$/, "");
+            if (abs >= 0.1) return Number(value).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+            return Number(value).toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+        }
+
+        function buildLogTicks(minPositive, maxPositive, includeZero = false) {
+            if (!Number.isFinite(minPositive) || !Number.isFinite(maxPositive) || minPositive <= 0 || maxPositive <= 0) return [];
+            const ticks = [];
+            if (includeZero) ticks.push({ value: 0, label: "0", isZero: true });
+            const startExp = Math.floor(Math.log10(minPositive));
+            const endExp = Math.ceil(Math.log10(maxPositive));
+            const mults = [1, 2, 5];
+            for (let e = startExp; e <= endExp; e++) {
+                for (const m of mults) {
+                    const v = m * Math.pow(10, e);
+                    if (v < minPositive * 0.999 || v > maxPositive * 1.001) continue;
+                    ticks.push({ value: v, label: formatTickLabel(v) });
+                }
+            }
+            return ticks;
+        }
+
+        function applyDynamicExportPreset() {
+            const statsPlacement = $("statsPlacement") ? $("statsPlacement").value : "off";
+            const residualPlacement = $("residualPlacement") ? $("residualPlacement").value : "bottom";
+            const logX = !!($("exportLogX") && $("exportLogX").checked);
+
+            const w = $("expWmm");
+            const h = $("expHmm");
+            const dpi = $("expDpi");
+            const line = $("lineScale");
+            const font = $("fontScale");
+
+            if (!w || !h || !dpi || !line || !font) return;
+
+            // Default 80 mm single-column presets tuned by export composition.
+            w.value = "80";
+            dpi.value = "600";
+
+            if (residualPlacement === "off" && statsPlacement === "off") {
+                h.value = logX ? "56" : "58";
+                line.value = "1.0";
+                font.value = "1.0";
+            } else if (residualPlacement === "off" && statsPlacement === "top") {
+                h.value = logX ? "64" : "66";
+                line.value = "1.0";
+                font.value = "0.95";
+            } else if (residualPlacement === "bottom" && statsPlacement === "off") {
+                h.value = logX ? "72" : "74";
+                line.value = "1.0";
+                font.value = "0.95";
+            } else {
+                h.value = logX ? "84" : "88";
+                line.value = "1.0";
+                font.value = "0.95";
+            }
+        }
+
         function buildSVGString() {
             const params = readInputs();
             const summary = computeFitSummary(params);
-
             const widthMm = Math.max(75, parseFloat($("expWmm").value) || 80);
             const heightMm = Math.max(70, parseFloat($("expHmm").value) || 88);
-            const lineScale = Math.max(0.8, parseFloat($("lineScale").value) || 1.5);
-            const fontScale = Math.max(0.7, parseFloat($("fontScale").value) || 1.1);
+            const lineScale = Math.max(0.7, parseFloat($("lineScale").value) || 1.0);
+            const fontScale = Math.max(0.7, parseFloat($("fontScale").value) || 1.0);
+            const statsPlacement = $("statsPlacement") ? $("statsPlacement").value : "bottom";
+            const exportLogX = !!($("exportLogX") && $("exportLogX").checked);
+            const residualPlacement = $("residualPlacement") ? $("residualPlacement").value : "bottom";
 
             const width = Math.round(widthMm * 10);
             const height = Math.round(heightMm * 10);
+            const statsRows = getExportDisplayRows(params, summary);
+            const statsVisible = statsPlacement !== "off";
+            const residualVisible = residualPlacement === "bottom";
+            const statsH = statsVisible ? Math.round(height * 0.095) : 0;
+            const topStatsH = statsPlacement === "top" ? statsH : 0;
+            const bottomStatsH = statsPlacement === "bottom" ? statsH : 0;
+            const topBottomOuterPad = Math.round(height * 0.018);
+            const interPanelGap = residualVisible ? Math.round(height * 0.038) : 0;
+            const statsGapTop = statsPlacement === "top" ? Math.round(height * 0.018) : 0;
+            const statsGapBottom = statsPlacement === "bottom" ? Math.round(height * 0.018) : 0;
+            const plotAreaH = height - topStatsH - bottomStatsH - interPanelGap - statsGapTop - statsGapBottom - 2 * topBottomOuterPad;
+            const mainH = residualVisible ? Math.round(plotAreaH * 0.895) : plotAreaH;
+            const residualH = residualVisible ? (plotAreaH - mainH) : 0;
 
-            const headerH = Math.round(height * 0.09);
-            const gap = Math.round(height * 0.022);
-            const plotAreaH = height - headerH - gap;
-            const mainH = Math.round(plotAreaH * 0.74);
-            const residualH = plotAreaH - mainH;
-
-            const left = Math.round(width * 0.09);
-            const right = Math.round(width * 0.015);
-            const topPad = Math.round(mainH * 0.03);
-            const bottomPadMain = Math.round(mainH * 0.10);
-            const topPadRes = Math.round(residualH * 0.04);
-            const bottomPadRes = Math.round(residualH * 0.18);
-
+            const left = Math.round(width * 0.12);
+            const right = Math.round(width * 0.02);
+            const topPad = Math.round(mainH * 0.065);
+            const bottomPadMain = residualVisible ? Math.round(mainH * 0.12) : Math.round(mainH * 0.10);
+            const topPadRes = residualVisible ? Math.round(residualH * 0.18) : 0;
+            const bottomPadRes = residualVisible ? Math.round(residualH * 0.28) : 0;
             const plotW = width - left - right;
             const mainPlotH = mainH - topPad - bottomPadMain;
-            const resPlotH = residualH - topPadRes - bottomPadRes;
+            const resPlotH = residualVisible ? (residualH - topPadRes - bottomPadRes) : 0;
+            const mainY0 = topBottomOuterPad + topStatsH + statsGapTop;
+            const resY0 = mainY0 + mainH + interPanelGap;
 
-            const mainY0 = headerH;
-            const resY0 = headerH + mainH + gap;
+            const allPoints = summary.includedDataPts.concat(summary.excludedDataPts);
+            const positiveX = allPoints.map(p => p.x).filter(v => v > 0);
+            const hasZero = allPoints.some(p => p.x <= 0);
+            const logAxis = exportLogX && positiveX.length >= 2;
+            const xPadRight = getSymmetricXPadding(summary.maxH);
+            const xMinLinear = -xPadRight;
+            const xMaxLinear = summary.maxH + xPadRight;
+            const xMinPos = logAxis ? Math.min(...positiveX) : null;
+            const xMaxPos = logAxis ? Math.max(...positiveX, 1) : null;
+            const zeroFrac = logAxis && hasZero ? 0.08 : 0;
+            const logMin = logAxis ? Math.log10(xMinPos) : null;
+            const logMax = logAxis ? Math.log10(xMaxPos) : null;
 
-            const xMin = -Math.min(summary.maxH * 0.03, 1.0);
-            const xMax = summary.maxH * 1.03;
-
-            const yMainMin = Math.min(...summary.dataPts.map(p => p.y), ...summary.curve.map(p => p.y));
-            const yMainMax = Math.max(...summary.dataPts.map(p => p.y), ...summary.curve.map(p => p.y));
-            const yMainSpan = (yMainMax - yMainMin || 1);
-            const yMainPadLower = Math.max(yMainSpan * 0.12, 0.08);
-            const yMainPadUpper = Math.max(yMainSpan * 0.06, 0.05);
+            const yMainMax = Math.max(...summary.includedDataPts.map(p => p.y), ...summary.excludedDataPts.map(p => p.y), ...summary.curve.map(p => p.y));
             const y1Min = 0;
-            const y1Max = yMainMax + yMainPadUpper;
-
+            const y1Max = yMainMax + Math.max((yMainMax || 1) * 0.06, 0.05);
             const y2Min = -1.1 * summary.residualRange;
             const y2Max = 1.1 * summary.residualRange;
 
-            const xMap = (x) => left + ((x - xMin) / (xMax - xMin || 1)) * plotW;
+            const xMap = (x) => {
+                if (!logAxis) return left + ((x - xMinLinear) / (xMaxLinear - xMinLinear || 1)) * plotW;
+                const usableLeft = left + zeroFrac * plotW;
+                const usableW = plotW * (1 - zeroFrac);
+                if (x <= 0) return left + plotW * zeroFrac * 0.45;
+                return usableLeft + ((Math.log10(x) - logMin) / (logMax - logMin || 1)) * usableW;
+            };
             const yMapMain = (y) => mainY0 + topPad + mainPlotH - ((y - y1Min) / (y1Max - y1Min || 1)) * mainPlotH;
             const yMapRes = (y) => resY0 + topPadRes + resPlotH - ((y - y2Min) / (y2Max - y2Min || 1)) * resPlotH;
 
-            const axisSW = (1.35 * lineScale).toFixed(2);
-            const fitSW = (1.95 * lineScale).toFixed(2);
-            const pointR = (3.15 * lineScale).toFixed(2);
-            const residualPointR = (2.15 * lineScale).toFixed(2);
-            const tickSize = Math.round(12 * fontScale);
-            const labelSize = Math.round(14 * fontScale);
-            const statsSize = Math.max(9, Math.round(width * 0.0095 * fontScale));
+            const axisSW = (1.0 * lineScale).toFixed(2);
+            const fitSW = (1.5 * lineScale).toFixed(2);
+            const pointR = (2.5 * lineScale).toFixed(2);
+            const residualPointR = (1.8 * lineScale).toFixed(2);
+            const tickSW = (0.9 * lineScale).toFixed(2);
+            const tickLen = Math.max(5, Math.round(5 * lineScale));
+            const tickSize = Math.max(11, Math.round(11 * fontScale));
+            const labelSize = Math.max(13, Math.round(13 * fontScale));
+            const statsSize = Math.max(10, Math.round(10 * fontScale));
 
-            const xTicks = niceTicks(xMin, xMax, 10);
-            const yMainTicksRaw = niceTicks(y1Min, y1Max, 10);
-            const yResTicksRaw = niceTicks(y2Min, y2Max, 10);
-
-            function sparsifyTicks(arr, maxCount) {
-                if (!Array.isArray(arr) || arr.length <= maxCount) return arr || [];
-                const step = Math.ceil(arr.length / maxCount);
-                const out = arr.filter((_, i) => i % step === 0);
-                if (out[out.length - 1] !== arr[arr.length - 1]) out.push(arr[arr.length - 1]);
-                return out;
-            }
-
-            const yMainTicks = sparsifyTicks(yMainTicksRaw, 12);
-            const yResTicks = sparsifyTicks(yResTicksRaw, 10);
+            const xTicks = logAxis ? buildLogTicks(xMinPos, xMaxPos, hasZero) : niceTicks(xMinLinear, xMaxLinear, 10).map(v => ({ value: v, label: formatTickLabel(v) }));
+            const yMainTicks = niceTicks(y1Min, y1Max, 8);
+            const yResTicks = niceTicks(y2Min, y2Max, 5);
 
             function textSvg(x, y, text, size, weight = "normal", anchor = "start") {
                 return `<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" fill="black">${escapeXml(text)}</text>`;
             }
-
             function lineSvg(x1, y1, x2, y2, stroke = "black", sw = 1, dash = "") {
                 return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${sw}" ${dash ? `stroke-dasharray="${dash}"` : ""}/>`;
             }
-
             function circleSvg(cx, cy, r, fill = "white", stroke = "black", sw = 1) {
                 return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
             }
-
+            function crossSvg(cx, cy, r, stroke = "#888", sw = 1) {
+                return lineSvg(cx-r, cy-r, cx+r, cy+r, stroke, sw) + lineSvg(cx-r, cy+r, cx+r, cy-r, stroke, sw);
+            }
             function polylinePoints(data, xFn, yFn) {
-                return data.map(p => `${xFn(p.x)},${yFn(p.y)}`).join(" ");
+                return data.filter(p => Number.isFinite(p.y) && (!logAxis || p.x > 0)).map(p => `${xFn(p.x)},${yFn(p.y)}`).join(" ");
+            }
+            function drawStatsTable(svgParts, yStart) {
+                if (!statsVisible) return;
+                const tableX = left;
+                const tableY = yStart + Math.round(8 * fontScale);
+                const tableW = plotW;
+                const rowH = Math.round(12 * fontScale);
+                const col1 = tableX + 8;
+                const col2 = tableX + Math.round(tableW * 0.28);
+                svgParts.push(`<rect x="${tableX}" y="${tableY}" width="${tableW}" height="${rowH * statsRows.length + 10}" fill="white" stroke="black" stroke-width="${Math.max(0.8, Number(axisSW) * 0.9)}"/>`);
+                for (let i = 0; i < statsRows.length; i++) {
+                    const y = tableY + 18 + i * rowH;
+                    if (i > 0) svgParts.push(lineSvg(tableX, y - 10, tableX + tableW, y - 10, "#d8d8d8", 0.6));
+                    svgParts.push(textSvg(col1, y, statsRows[i][0], statsSize, "normal", "start"));
+                    svgParts.push(textSvg(col2, y, statsRows[i][1], statsSize, "normal", "start"));
+                }
             }
 
-            let svg = "";
-            svg += `<?xml version="1.0" encoding="UTF-8"?>`;
-            svg += `<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${width} ${height}">`;
-            svg += `<rect x="0" y="0" width="${width}" height="${height}" fill="white"/>`;
+            const svgParts = [];
+            svgParts.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+            svgParts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${widthMm}mm" height="${heightMm}mm" viewBox="0 0 ${width} ${height}">`);
+            svgParts.push(`<rect x="0" y="0" width="${width}" height="${height}" fill="white"/>`);
+            if (statsPlacement === "top") drawStatsTable(svgParts, 0);
 
-            const statsTextLine1 =
-                `R² = ${summary.r2.toFixed(4)}   RMSE = ${summary.rmse.toFixed(4)}`;
-            const statsTextLine2 =
-                `Kd = ${formatKdWithUnit(params.Kd)}    |    n = ${params.n.toFixed(4)}    |    α = ${params.alpha.toFixed(4)}    |    kq·τ0 = ${params.KSV.toFixed(4)} mM⁻¹`;
+            const legendY = Math.round(mainY0 + topPad + 28);
+            const legendR = Math.max(3.5, Math.round(3.8 * lineScale));
+            const legendLineGap = Math.round(16 * fontScale);
+            const hasExcludedLegend = summary.excludedCount > 0;
+            const legendItems = [
+                { kind: "included", label: "Data" },
+                ...(hasExcludedLegend ? [{ kind: "excluded", label: "Excluded" }] : []),
+                { kind: "fit", label: "Fit" }
+            ];
+            const legendSymbolW = Math.round(18 * fontScale);
+            const legendGap = Math.round(10 * fontScale);
+            const legendRightMargin = Math.round(10 * fontScale);
+            const legendTextX = left + plotW - legendRightMargin - Math.round(42 * fontScale);
+            const legendX = legendTextX - legendGap - legendSymbolW;
 
-            const legendY = Math.round(mainY0 + topPad + 20);
-            const legendR = Math.max(4, Math.round(4.2 * lineScale));
-            const fitLegendLineLen = Math.round(26 * fontScale);
+            legendItems.forEach((item, i) => {
+                const yy = legendY + i * legendLineGap;
+                if (item.kind === "included") {
+                    svgParts.push(circleSvg(legendX + legendSymbolW / 2, yy - 3, legendR, "white", "black", 1.0));
+                    svgParts.push(textSvg(legendTextX, yy + 2, item.label, tickSize, "normal", "start"));
+                } else if (item.kind === "excluded") {
+                    svgParts.push(crossSvg(legendX + legendSymbolW / 2, yy - 3, legendR + 1, "#888", 1.0));
+                    svgParts.push(textSvg(legendTextX, yy + 2, item.label, tickSize, "normal", "start"));
+                } else {
+                    const lineY = yy - 3;
+                    svgParts.push(lineSvg(legendX + 1, lineY, legendX + legendSymbolW - 1, lineY, "black", fitSW));
+                    svgParts.push(textSvg(legendTextX, yy + 2, item.label, tickSize, "normal", "start"));
+                }
+            });
 
-            // Use the same right alignment anchor for legend and statistics
-            const statsX = Math.round(left + plotW - 14);
-
-            // Cleaner top-right legend: ○ Data      — Fit
-            // Right edge of the Fit text aligns with the statistics block.
-            const fitTextRight = statsX;
-            const fitTextWidthApprox = Math.round(18 * fontScale);
-            const fitTextX = fitTextRight - fitTextWidthApprox;
-            const fitLineEnd = fitTextX - Math.round(10 * fontScale);
-            const fitLineStart = fitLineEnd - fitLegendLineLen;
-
-            const dataTextX = fitLineStart - Math.round(42 * fontScale);
-            const dataCircleX = dataTextX - Math.round(14 * fontScale);
-
-            svg += `<circle cx="${dataCircleX}" cy="${legendY}" r="${legendR}" fill="white" stroke="black" stroke-width="1.3"/>`;
-            svg += textSvg(dataTextX, legendY + 5, "Data", tickSize, "bold", "start");
-            svg += lineSvg(fitLineStart, legendY, fitLineEnd, legendY, "black", fitSW);
-            svg += textSvg(fitTextRight, legendY + 5, "Fit", tickSize, "bold", "end");
-
-            // Statistics below legend, aligned to the same right edge
-            const statsY1 = Math.round(legendY + statsSize * 2.3);
-            const statsY2 = Math.round(legendY + statsSize * 3.9);
-            svg += textSvg(statsX, statsY1, statsTextLine1, statsSize, "bold", "end");
-            svg += textSvg(statsX, statsY2, statsTextLine2, statsSize, "bold", "end");
-
-            svg += lineSvg(left, mainY0 + topPad + mainPlotH, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW);
-            svg += lineSvg(left, mainY0 + topPad, left, mainY0 + topPad + mainPlotH, "black", axisSW);
-            svg += lineSvg(left + plotW, mainY0 + topPad, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW);
-            svg += lineSvg(left, mainY0 + topPad, left + plotW, mainY0 + topPad, "black", axisSW);
+            // main frame
+            svgParts.push(lineSvg(left, mainY0 + topPad + mainPlotH, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, mainY0 + topPad, left, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left + plotW, mainY0 + topPad, left + plotW, mainY0 + topPad + mainPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, mainY0 + topPad, left + plotW, mainY0 + topPad, "black", axisSW));
 
             for (const t of xTicks) {
-                const x = xMap(t);
+                const x = xMap(t.value);
                 const yAxis = mainY0 + topPad + mainPlotH;
-                svg += lineSvg(x, yAxis, x, yAxis + 6, "black", 1);
-                svg += textSvg(x, yAxis + 28, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "middle");
+                svgParts.push(lineSvg(x, yAxis, x, yAxis - tickLen, "black", tickSW));
+                svgParts.push(lineSvg(x, mainY0 + topPad, x, mainY0 + topPad + tickLen, "black", tickSW));
+                svgParts.push(textSvg(x, yAxis + 20, t.label, tickSize, "normal", "middle"));
             }
-
             for (const t of yMainTicks) {
                 const y = yMapMain(t);
                 if (y < mainY0 + topPad - 0.5 || y > mainY0 + topPad + mainPlotH + 0.5) continue;
-                svg += lineSvg(left - 6, y, left, y, "black", 1);
-                svg += textSvg(left - 10, y + 6, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "end");
+                svgParts.push(lineSvg(left, y, left + tickLen, y, "black", tickSW));
+                svgParts.push(lineSvg(left + plotW, y, left + plotW - tickLen, y, "black", tickSW));
+                svgParts.push(textSvg(left - 8, y + 4, formatTickLabel(t), tickSize, "normal", "end"));
             }
-
-            svg += `<text x="${left + plotW / 2}" y="${mainY0 + mainH - 10}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black">[H]₀ / mM</text>`;
-            svg += `<text x="${24}" y="${mainY0 + topPad + mainPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 24 ${mainY0 + topPad + mainPlotH / 2})">Fluorescence / a.u.</text>`;
-
-            svg += `<polyline fill="none" stroke="black" stroke-width="${fitSW}" points="${polylinePoints(summary.curve, xMap, yMapMain)}"/>`;
-
-            for (const p of summary.dataPts) {
-                svg += circleSvg(xMap(p.x), yMapMain(p.y), pointR, "white", "black", 1.2);
-            }
-
-            svg += lineSvg(left, resY0 + topPadRes + resPlotH, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW);
-            svg += lineSvg(left, resY0 + topPadRes, left, resY0 + topPadRes + resPlotH, "black", axisSW);
-            svg += lineSvg(left + plotW, resY0 + topPadRes, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW);
-            svg += lineSvg(left, resY0 + topPadRes, left + plotW, resY0 + topPadRes, "black", axisSW);
-
+            svgParts.push(textSvg(left + plotW / 2, mainY0 + mainH - 6, logAxis ? "[H]₀ / mM (log)" : "[H]₀ / mM", labelSize, "bold", "middle"));
+            svgParts.push(`<text x="26" y="${mainY0 + topPad + mainPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 26 ${mainY0 + topPad + mainPlotH / 2})">Fluorescence / a.u.</text>`);
+            svgParts.push(`<polyline fill="none" stroke="black" stroke-width="${fitSW}" points="${polylinePoints(summary.curve, xMap, yMapMain)}"/>`);
+            for (const p of summary.includedDataPts) svgParts.push(circleSvg(xMap(p.x), yMapMain(p.y), pointR, "white", "black", 1.1));
+            for (const p of summary.excludedDataPts) svgParts.push(crossSvg(xMap(p.x), yMapMain(p.y), Number(pointR) + 1, "#888", 1.1));            // residual frame
+            if (residualVisible) {
+            svgParts.push(lineSvg(left, resY0 + topPadRes + resPlotH, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, resY0 + topPadRes, left, resY0 + topPadRes + resPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left + plotW, resY0 + topPadRes, left + plotW, resY0 + topPadRes + resPlotH, "black", axisSW));
+            svgParts.push(lineSvg(left, resY0 + topPadRes, left + plotW, resY0 + topPadRes, "black", axisSW));
             for (const t of xTicks) {
-                const x = xMap(t);
+                const x = xMap(t.value);
                 const yAxis = resY0 + topPadRes + resPlotH;
-                svg += lineSvg(x, yAxis, x, yAxis + 6, "black", 1);
-                svg += textSvg(x, yAxis + 28, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "middle");
+                svgParts.push(lineSvg(x, yAxis, x, yAxis - tickLen, "black", tickSW));
+                svgParts.push(lineSvg(x, resY0 + topPadRes, x, resY0 + topPadRes + tickLen, "black", tickSW));
+                svgParts.push(textSvg(x, yAxis + 18, t.label, tickSize, "normal", "middle"));
             }
-
             for (const t of yResTicks) {
                 const y = yMapRes(t);
                 if (y < resY0 + topPadRes - 0.5 || y > resY0 + topPadRes + resPlotH + 0.5) continue;
-                svg += lineSvg(left, y, left + plotW, y, "#ebebeb", 0.6);
-                svg += lineSvg(left - 6, y, left, y, "black", 1);
-                svg += textSvg(left - 10, y + 6, Number(t).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1"), tickSize, "bold", "end");
+                svgParts.push(lineSvg(left, y, left + plotW, y, "#ebebeb", 0.6));
+                svgParts.push(lineSvg(left, y, left + tickLen, y, "black", tickSW));
+                svgParts.push(lineSvg(left + plotW, y, left + plotW - tickLen, y, "black", tickSW));
+                svgParts.push(textSvg(left - 8, y + 4, formatTickLabel(t), tickSize, "normal", "end"));
             }
-
             const zeroY = yMapRes(0);
-            svg += lineSvg(left, zeroY, left + plotW, zeroY, "black", 1.0, "8 6");
+            svgParts.push(lineSvg(left, zeroY, left + plotW, zeroY, "black", 0.9, "7 5"));
+            for (const p of summary.includedResPts) svgParts.push(`<circle cx="${xMap(p.x)}" cy="${yMapRes(p.y)}" r="${residualPointR}" fill="black"/>`);
+            for (const p of summary.excludedResPts) svgParts.push(crossSvg(xMap(p.x), yMapRes(p.y), Number(residualPointR)+1, "#888", 1.0));
+            svgParts.push(`<text x="26" y="${resY0 + topPadRes + resPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 26 ${resY0 + topPadRes + resPlotH / 2})">Residual / a.u.</text>`);
 
-            for (const p of summary.resPts) {
-                svg += `<circle cx="${xMap(p.x)}" cy="${yMapRes(p.y)}" r="${residualPointR}" fill="black"/>`;
             }
 
-            svg += `<text x="${24}" y="${resY0 + topPadRes + resPlotH / 2}" font-family="Arial, Helvetica, sans-serif" font-size="${labelSize}" font-weight="bold" text-anchor="middle" fill="black" transform="rotate(-90 24 ${resY0 + topPadRes + resPlotH / 2})">Residual / a.u.</text>`;
+            if (!residualVisible) {
+                svgParts.push(textSvg(left + plotW / 2, height - topBottomOuterPad - bottomStatsH - statsGapBottom - 6, logAxis ? "[H]₀ / mM (log)" : "[H]₀ / mM", labelSize, "bold", "middle"));
+            }
 
-            svg += `</svg>`;
-            return { svg, widthMm, heightMm };
+            if (statsPlacement === "bottom") drawStatsTable(svgParts, height - bottomStatsH);
+            svgParts.push(`</svg>`);
+            return { svg: svgParts.join(""), widthMm, heightMm };
         }
 
-        function downloadTextFile(filename, content, mime) {
-            const blob = new Blob([content], { type: mime });
+        function triggerBlobDownload(blob, filename) {
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
-            link.download = filename;
             link.href = url;
+            link.download = filename;
+            link.style.display = "none";
+            document.body.appendChild(link);
             link.click();
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
+            setTimeout(() => {
+                link.remove();
+                URL.revokeObjectURL(url);
+            }, 1500);
+        }
+
+        function downloadTextFile(filename, content, mime = "text/plain;charset=utf-8") {
+            triggerBlobDownload(new Blob([content], { type: mime }), filename);
         }
 
         async function exportPngFromSvg() {
             const { svg, widthMm, heightMm } = buildSVGString();
             const dpi = Math.max(300, parseInt($("expDpi").value, 10) || 600);
 
-            const pxWidth = Math.round((widthMm / 25.4) * dpi);
-            const pxHeight = Math.round((heightMm / 25.4) * dpi);
+            const pxWidth = Math.max(1, Math.round((widthMm / 25.4) * dpi));
+            const pxHeight = Math.max(1, Math.round((heightMm / 25.4) * dpi));
 
             const svgBlob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
             const url = URL.createObjectURL(svgBlob);
@@ -1400,10 +2038,11 @@ const mainChart = new Chart(mainCtx, {
             try {
                 const img = new Image();
                 img.decoding = "sync";
+                img.crossOrigin = "anonymous";
 
                 await new Promise((resolve, reject) => {
-                    img.onload = resolve;
-                    img.onerror = reject;
+                    img.onload = () => resolve();
+                    img.onerror = () => reject(new Error("Could not render SVG into an image."));
                     img.src = url;
                 });
 
@@ -1411,27 +2050,100 @@ const mainChart = new Chart(mainCtx, {
                 canvas.width = pxWidth;
                 canvas.height = pxHeight;
 
-                const ctx = canvas.getContext("2d");
+                const ctx = canvas.getContext("2d", { alpha: false });
+                if (!ctx) throw new Error("Canvas export context could not be created.");
                 ctx.fillStyle = "white";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.imageSmoothingEnabled = true;
                 ctx.imageSmoothingQuality = "high";
                 ctx.drawImage(img, 0, 0, pxWidth, pxHeight);
 
-                const link = document.createElement("a");
-                link.download = `Figure_1_quenching_${Math.round(widthMm)}mm_${dpi}dpi.png`;
-                link.href = canvas.toDataURL("image/png");
-                link.click();
+                const pngBlob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) resolve(blob);
+                        else reject(new Error("Canvas could not be converted to PNG."));
+                    }, "image/png");
+                });
+
+                triggerBlobDownload(pngBlob, `Figure_1_quenching_${Math.round(widthMm)}mm_${dpi}dpi.png`);
             } finally {
                 URL.revokeObjectURL(url);
             }
         }
 
+        async function exportPdfFromSvg() {
+            const built = buildSVGString();
+            const widthMm = built.widthMm;
+            const heightMm = built.heightMm;
+            const svgText = built.svg;
+
+            const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+            if (!jsPDFCtor) throw new Error("PDF export library jsPDF could not be loaded.");
+
+            const dpi = Math.max(300, parseInt($("expDpi").value, 10) || 600);
+            const pxWidth = Math.max(1, Math.round((widthMm / 25.4) * dpi));
+            const pxHeight = Math.max(1, Math.round((heightMm / 25.4) * dpi));
+
+            const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(svgBlob);
+
+            try {
+                const img = new Image();
+                img.decoding = "sync";
+                img.crossOrigin = "anonymous";
+
+                await new Promise((resolve, reject) => {
+                    img.onload = () => resolve();
+                    img.onerror = () => reject(new Error("Could not render SVG for PDF export."));
+                    img.src = url;
+                });
+
+                const canvas = document.createElement("canvas");
+                canvas.width = pxWidth;
+                canvas.height = pxHeight;
+                const ctx = canvas.getContext("2d", { alpha: false });
+                if (!ctx) throw new Error("Canvas export context could not be created.");
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = "high";
+                ctx.drawImage(img, 0, 0, pxWidth, pxHeight);
+
+                const imgData = canvas.toDataURL("image/png");
+                const pdf = new jsPDFCtor({
+                    orientation: widthMm >= heightMm ? "landscape" : "portrait",
+                    unit: "mm",
+                    format: [widthMm, heightMm],
+                    compress: true
+                });
+                pdf.setFont("helvetica", "normal");
+                pdf.addImage(imgData, "PNG", 0, 0, widthMm, heightMm, undefined, "FAST");
+                pdf.save(`Figure_1_quenching_${Math.round(widthMm)}mm.pdf`);
+            } finally {
+                URL.revokeObjectURL(url);
+            }
+        }
+
+        ["statsPlacement", "residualPlacement", "exportLogX"].forEach((id) => {
+            const el = $(id);
+            if (!el) return;
+            el.addEventListener("change", applyDynamicExportPreset);
+            el.addEventListener("input", applyDynamicExportPreset);
+        });
+
+        $("pdfBtn").addEventListener("click", async () => {
+            try {
+                await exportPdfFromSvg();
+            } catch (err) {
+                showError(err.message || "PDF export failed.");
+            }
+        });
+
         $("pngBtn").addEventListener("click", async () => {
             try {
                 await exportPngFromSvg();
             } catch (err) {
-                showError("PNG export failed. Try SVG export or check the browser console.");
+                showError(err.message || "PNG export failed. Try SVG export.");
             }
         });
 
@@ -1449,6 +2161,8 @@ const mainChart = new Chart(mainCtx, {
         $("alpha").value = alphaToSlider(parseFloat(normalizeDotDecimal($("alpha_num").value)) || 0.01);
         $("KSV").value = KSVToSlider(parseFloat(normalizeDotDecimal($("KSV_num").value)) || 0.5);
 
+        applyJournalTheme($("journalTheme").value);
+        applyDynamicExportPreset();
         safeUpdate(false);
     </script>
 </body>
