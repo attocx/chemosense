@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Quenching Analysis</title>
+    <title>1:n Quenching Analysis Tool</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
     <script>
@@ -342,7 +342,7 @@
                 </div>
             </div>
             <input type="range" id="alpha" min="0" max="1" step="0.0001" value="0.5000">
-            <div class="hint-text">α = complex residual brightness (log slider: 0.0001–1)</div>
+            <div class="hint-text">α = complex residual brightness (range 0–1; log slider) </div>
         </div>
 
         <div class="control-group">
@@ -353,7 +353,8 @@
                     <input type="text" inputmode="decimal" id="KSV_num" class="val-input" step="0.0001" value="0.5000">
                 </div>
             </div>
-            <input type="range" id="KSV" min="0" max="100" step="0.01" value="0.5000">
+            <input type="range" id="KSV" min="0" max="1" step="0.0001" value="0.6165">
+                    <div class="hint-text"><i>k</i><sub>q</sub>·τ<sub>0</sub> = Dynamic quenching parameter (range 0–100; log slider) </div>
         </div>
 
         <h3>3. Analysis</h3>
@@ -393,7 +394,7 @@
                 Font scale: <input type="number" id="fontScale" value="1.1" step="0.1" style="width:60px;">
             </div>
             <div class="hint-text" style="text-align:left;">
-                Compact publication defaults are tuned for single-column style.
+                Default figure layout tuned for single-column compact style.
             </div>
             <button id="pngBtn">Export Publication PNG</button>
             <button id="svgBtn">Export SVG</button>
@@ -542,7 +543,7 @@
             if (!Number.isFinite(Kd) || Kd < 1e-7 || Kd > 1e2) errors.push("Kd must be between 0.1 nM and 100 mM.");
             if (!Number.isFinite(n) || n < 0.1 || n > 10) errors.push("n must be between 0.1 and 10.");
                         if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) errors.push("α must be between 0 and 1.");
-            if (!Number.isFinite(KSV) || KSV < 0) errors.push("KSV must be non-negative.");
+            if (!Number.isFinite(KSV) || KSV < 0 || KSV > 100) errors.push("KSV must be between 0 and 100.");
             if (h.some(v => v < 0)) errors.push("[H]₀ values must be non-negative.");
 
             if (errors.length > 0) throw new Error(errors.join("\n"));
@@ -844,6 +845,31 @@ const mainChart = new Chart(mainCtx, {
             $("alpha").value = alphaToSlider(alpha);
         }
 
+        function KSVToSlider(KSV) {
+            if (!Number.isFinite(KSV) || KSV <= 0) return 0;
+            const v = clamp(KSV, 1e-3, 100);
+            return (Math.log10(v) + 3) / 5;
+        }
+
+        function sliderToKSV(t) {
+            const tt = clamp(Number.isFinite(t) ? t : 0.5, 0, 1);
+            return Math.pow(10, -3 + 5 * tt);
+        }
+
+        function syncKSVFromSlider() {
+            const t = parseFloat($("KSV").value);
+            const KSV = sliderToKSV(t);
+            $("KSV_num").value = KSV.toFixed(4);
+        }
+
+        function syncKSVFromNumber() {
+            let KSV = parseFloat(normalizeDotDecimal($("KSV_num").value));
+            if (!Number.isFinite(KSV)) KSV = 0.5;
+            KSV = clamp(KSV, 0, 100);
+            $("KSV_num").value = KSV.toFixed(4);
+            $("KSV").value = KSVToSlider(KSV);
+        }
+
         function syncKdFromSlider() {
             const kd_mM = Math.pow(10, parseFloat($("Kd").value));
             $("Kd_num").value = formatKdWithUnit(kd_mM);
@@ -899,8 +925,7 @@ const mainChart = new Chart(mainCtx, {
             }
         });
 
-                syncLinearPair("KSV", "KSV_num");
-
+        
 
         $("alpha").addEventListener("input", () => {
             syncAlphaFromSlider();
@@ -909,6 +934,16 @@ const mainChart = new Chart(mainCtx, {
 
         $("alpha_num").addEventListener("input", () => {
             syncAlphaFromNumber();
+            safeUpdate(false);
+        });
+
+        $("KSV").addEventListener("input", () => {
+            syncKSVFromSlider();
+            safeUpdate(false);
+        });
+
+        $("KSV_num").addEventListener("input", () => {
+            syncKSVFromNumber();
             safeUpdate(false);
         });
 
@@ -1012,7 +1047,7 @@ const mainChart = new Chart(mainCtx, {
                 Kd: parseKdInput($("Kd_num").value),
                 n: parseFloat($("n_num").value),
                 alpha: parseFloat(normalizeDotDecimal($("alpha_num").value)),
-                KSV: parseFloat($("KSV_num").value)
+                KSV: parseFloat(normalizeDotDecimal($("KSV_num").value))
             };
         }
 
@@ -1025,7 +1060,7 @@ const mainChart = new Chart(mainCtx, {
             syncKdSliderFromInput();
             $("n").value = clamp(params.n, parseFloat($("n").min), parseFloat($("n").max));
             $("alpha").value = alphaToSlider(params.alpha);
-            $("KSV").value = clamp(params.KSV, parseFloat($("KSV").min), parseFloat($("KSV").max));
+            $("KSV").value = KSVToSlider(params.KSV);
             forceDotDecimals();
         }
 
@@ -1067,8 +1102,8 @@ const mainChart = new Chart(mainCtx, {
                     trials.push({ key: "alpha", val: clamp(p.alpha - stepAlpha, 0, 1) });
                 }
                 if (!fixed.KSV) {
-                    trials.push({ key: "KSV", val: clamp(p.KSV + stepKSV, 0, 100) });
-                    trials.push({ key: "KSV", val: clamp(p.KSV - stepKSV, 0, 100) });
+                    trials.push({ key: "KSV", val: clamp(p.KSV * Math.pow(10, stepKSV), 0, 100) });
+                    trials.push({ key: "KSV", val: clamp(p.KSV / Math.pow(10, stepKSV), 0, 100) });
                 }
 
                 for (const t of trials) {
@@ -1412,7 +1447,7 @@ const mainChart = new Chart(mainCtx, {
         syncKdSliderFromInput();
         $("n").value = $("n_num").value;
         $("alpha").value = alphaToSlider(parseFloat(normalizeDotDecimal($("alpha_num").value)) || 0.01);
-        $("KSV").value = $("KSV_num").value;
+        $("KSV").value = KSVToSlider(parseFloat(normalizeDotDecimal($("KSV_num").value)) || 0.5);
 
         safeUpdate(false);
     </script>
